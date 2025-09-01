@@ -15,10 +15,12 @@ export default function AuthStatusClientComponent() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      console.log("AuthStatusClientComponent: Initial session", session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      console.log("AuthStatusClientComponent: Auth state change", _event, session);
     });
 
     return () => subscription.unsubscribe();

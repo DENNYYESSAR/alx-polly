@@ -1,0 +1,4 @@
+id,created_at,user_id,question,description,allow_multiple_options,is_private
+0b81a8b0-a5a4-4f93-b6c8-5e4f4d2f0a1b,2023-10-26T10:00:00Z,07df988a-2556-4240-b044-f2790bc597d7,What's your favorite color?,Choose your favorite color from the options below.,false,false
+1c92b9c1-b6b5-4g04-c7d9-6f5g5e3g1b2c,2023-10-26T10:05:00Z,07df988a-2556-4240-b044-f2790bc597d7,Best programming language?,Pick the best programming language for general development.,false,false
+2d03c0d2-c7c6-5h15-d8e0-7g6h6f4h2c3d,2023-10-26T10:10:00Z,07df988a-2556-4240-b044-f2790bc597d7,Coffee or Tea?,Which hot beverage do you prefer?,false,false

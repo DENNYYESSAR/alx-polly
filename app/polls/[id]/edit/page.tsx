@@ -1,28 +1,91 @@
 "use client";
 
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, X } from "lucide-react";
-import { createPoll } from "@/lib/actions";
+import { Plus, X, ChevronLeft } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from 'next/navigation';
+import { updatePoll, updatePollSettings } from "@/lib/actions"; // We will create this action later
+import React from 'react';
 
-export default function CreatePollPage() {
+interface PollOption {
+  id: string;
+  option_text: string;
+}
+
+interface PollData {
+  id: string;
+  question: string;
+  description: string | null;
+  allow_multiple_options: boolean;
+  is_private: boolean;
+  poll_options: PollOption[];
+}
+
+export default function EditPollPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = React.use(params);
+  const pollId = resolvedParams.id;
+  const [poll, setPoll] = useState<PollData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [description, setDescription] = useState("");
-  const [options, setOptions] = useState<string[]>(["", ""]);
+  const [options, setOptions] = useState<PollOption[]>([]);
   const [allowMultipleOptions, setAllowMultipleOptions] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
-  const [endsAt, setEndsAt] = useState<string | null>(null); // New state for end date
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
+  const router = useRouter();
+
+  useEffect(() => {
+    async function fetchPoll() {
+      setLoading(true);
+      setError(null);
+      setMessage("");
+
+      const { data, error } = await supabase
+        .from("polls")
+        .select(
+          `
+          id,
+          question,
+          description,
+          allow_multiple_options,
+          is_private,
+          poll_options(
+            id,
+            option_text
+          )
+        `
+        )
+        .eq("id", pollId)
+        .single();
+
+      if (error) {
+        console.error("Error fetching poll for editing:", error);
+        setError("Failed to load poll for editing.");
+      } else if (data) {
+        setPoll(data as PollData);
+        setQuestion(data.question);
+        setDescription(data.description || "");
+        setOptions(data.poll_options);
+        setAllowMultipleOptions(data.allow_multiple_options);
+        setIsPrivate(data.is_private);
+      }
+      setLoading(false);
+    }
+
+    fetchPoll();
+  }, [pollId]);
 
   const handleAddOption = () => {
-    setOptions([...options, ""]);
+    setOptions([...options, { id: `new-${options.length}`, option_text: "" }]);
   };
 
   const handleRemoveOption = (index: number) => {
@@ -31,46 +94,55 @@ export default function CreatePollPage() {
 
   const handleOptionChange = (index: number, value: string) => {
     const newOptions = [...options];
-    newOptions[index] = value;
+    newOptions[index].option_text = value;
     setOptions(newOptions);
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); // Prevent default form submission
-    setMessage("");
+  const handleSubmit = async (formData: FormData) => {
+    if (!poll) return; // Should not happen if poll is loaded
 
-    const formData = new FormData(event.currentTarget); // Create FormData from the current form
-    // Add settings from state to formData
-    formData.append("allowMultipleOptions", allowMultipleOptions ? "on" : "off");
-    formData.append("isPrivate", isPrivate ? "on" : "off");
-    if (endsAt) {
-      formData.append("endsAt", endsAt);
-    }
-
-    // Add poll options to formData. createPoll server action will handle parsing.
-    options.forEach((optionText, index) => {
-      formData.append(`option-${index}`, optionText);
-    });
+    const updatedOptions = options.map(option => option.option_text);
+    formData.append("id", poll.id);
+    formData.append("options_json", JSON.stringify(updatedOptions));
 
     startTransition(async () => {
-      const result = await createPoll(formData);
+      const result = await updatePoll(formData);
       setMessage(result.message);
-      if (result.message === "Poll created successfully!") {
-        // The redirect is handled by the server action itself for now.
+      if (result.message === "Poll updated successfully!") {
+        router.push("/polls");
       }
     });
   };
 
+  if (loading) {
+    return <div className="text-center py-8">Loading poll for editing...</div>;
+  }
+
+  if (error) {
+    return <div className="text-center py-8 text-red-500">Error: {error}</div>;
+  }
+
+  if (!poll) {
+    return <div className="text-center py-8 text-muted-foreground">Poll not found.</div>;
+  }
+
   return (
     <div className="space-y-6">
+      <Button variant="link" asChild className="pl-0">
+        <Link href="/polls" className="flex items-center gap-1">
+          <ChevronLeft className="h-4 w-4" />
+          Back to Polls
+        </Link>
+      </Button>
+
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Create New Poll</h1>
+        <h1 className="text-3xl font-bold">Edit Poll</h1>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
             <Link href="/polls">Cancel</Link>
           </Button>
-          <Button type="submit" form="create-poll-form" disabled={isPending}>
-            {isPending ? "Creating..." : "Create Poll"}
+          <Button type="submit" form="edit-poll-form" disabled={isPending}>
+            {isPending ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </div>
@@ -84,10 +156,10 @@ export default function CreatePollPage() {
           <Card>
             <CardHeader>
               <CardTitle>Poll Information</CardTitle>
-              <CardDescription>Enter the details for your new poll</CardDescription>
+              <CardDescription>Update the details for your poll</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <form id="create-poll-form" action={handleSubmit} className="space-y-4">
+              <form id="edit-poll-form" action={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="question">Poll Title</Label>
                   <Input
@@ -112,12 +184,12 @@ export default function CreatePollPage() {
                 <div className="space-y-2">
                   <Label htmlFor="poll-options">Poll Options</Label>
                   {options.map((option, index) => (
-                    <div key={index} className="flex items-center space-x-2">
+                    <div key={option.id || `new-${index}`} className="flex items-center space-x-2">
                       <Input
                         id={`option-${index}`}
                         name="option"
                         placeholder={`Option ${index + 1}`}
-                        value={option}
+                        value={option.option_text}
                         onChange={(e) => handleOptionChange(index, e.target.value)}
                         required
                       />
@@ -135,8 +207,8 @@ export default function CreatePollPage() {
               </form>
             </CardContent>
             <CardFooter className="flex justify-end">
-              <Button type="submit" form="create-poll-form" disabled={isPending}>
-                {isPending ? "Creating..." : "Create Poll"}
+              <Button type="submit" form="edit-poll-form" disabled={isPending}>
+                {isPending ? "Saving..." : "Save Changes"}
               </Button>
             </CardFooter>
           </Card>
@@ -148,7 +220,46 @@ export default function CreatePollPage() {
               <CardDescription>Configure additional options for your poll</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <form id="create-poll-settings-form" className="space-y-4">
+              <form id="edit-poll-settings-form" action={async (formData) => {
+                formData.append("id", poll.id);
+                startTransition(async () => {
+                  const result = await updatePollSettings(formData);
+                  setMessage(result.message);
+                  if (result.message === "Poll settings updated successfully!") {
+                    // Re-fetch poll data to update the UI
+                    // This ensures checkboxes reflect the saved state
+                    async function refreshPoll() {
+                      const { data, error } = await supabase
+                        .from("polls")
+                        .select(
+                          `
+                          id,
+                          question,
+                          description,
+                          allow_multiple_options,
+                          is_private,
+                          poll_options(
+                            id,
+                            option_text
+                          )
+                        `
+                        )
+                        .eq("id", poll.id)
+                        .single();
+
+                      if (error) {
+                        console.error("Error re-fetching poll after settings update:", error);
+                        setError("Failed to refresh poll data.");
+                      } else if (data) {
+                        setPoll(data as PollData);
+                        setAllowMultipleOptions(data.allow_multiple_options);
+                        setIsPrivate(data.is_private);
+                      }
+                    }
+                    refreshPoll();
+                  }
+                });
+              }} className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -183,19 +294,13 @@ export default function CreatePollPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="poll-end-date">Poll End Date (Optional)</Label>
-                  <Input
-                    id="poll-end-date"
-                    type="date"
-                    name="endsAt"
-                    value={endsAt || ""}
-                    onChange={(e) => setEndsAt(e.target.value)}
-                  />
+                  <Input id="poll-end-date" type="date" placeholder="dd/mm/yyyy --:--" />
                 </div>
               </form>
             </CardContent>
             <CardFooter className="flex justify-end">
-              <Button type="submit" form="create-poll-settings-form" disabled={isPending}>
-                {isPending ? "Saving Settings..." : "Save Settings"}
+              <Button type="submit" form="edit-poll-settings-form" disabled={isPending}>
+                {isPending ? "Saving..." : "Save Settings"}
               </Button>
             </CardFooter>
           </Card>
