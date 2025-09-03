@@ -22,7 +22,7 @@ export async function createPoll(formData: FormData): Promise<CreatePollFormStat
   const endsAt = endsAtString ? new Date(endsAtString).toISOString() : null;
 
   const cookieStore = await cookies();
-  console.log("createPoll Server Action: All cookies", cookieStore.getAll());
+  // console.log("createPoll Server Action: All cookies", cookieStore.getAll()); // Removed for testing
   const supabaseAuthCookieName = `sb-${process.env.NEXT_PUBLIC_SUPABASE_URL!.split(".")[0].split("//")[1]}-auth-token`;
   const supabaseAuthCookie = cookieStore.get(supabaseAuthCookieName);
   console.log(`createPoll Server Action: Supabase Auth Cookie (${supabaseAuthCookieName})`, supabaseAuthCookie);
@@ -398,8 +398,9 @@ export async function sendPasswordResetEmail(email: string): Promise<ForgotPassw
           const store = await cookieStore;
           store.set({ name, value, ...options });
         },
-        remove(name: string) {
-          cookieStore.delete(name);
+        remove: async (name: string, options: CookieOptions) => {
+          const store = await cookieStore;
+          store.delete({ name, ...options });
         },
       },
     }
@@ -431,14 +432,17 @@ export async function updatePassword(newPassword: string): Promise<UpdatePasswor
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
+        get: async (name: string) => {
+          const store = await cookieStore;
+          return store.get(name)?.value;
         },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
+        set: async (name: string, value: string, options: CookieOptions) => {
+          const store = await cookieStore;
+          store.set({ name, value, ...options });
         },
-        remove(name: string) {
-          cookieStore.delete(name);
+        remove: async (name: string, options: CookieOptions) => {
+          const store = await cookieStore;
+          store.delete({ name, ...options });
         },
       },
     }
