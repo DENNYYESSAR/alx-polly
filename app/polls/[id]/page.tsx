@@ -32,6 +32,14 @@ interface Poll {
 }
 
 export default function ViewPollPage({ params }: { params: Promise<{ id: string }> }) {
+  /**
+   * @doc ViewPollPage component displays a single poll with its details, options, and voting mechanism.
+   * This component fetches a specific poll by its ID, handles user authentication, allows users to submit votes,
+   * and provides options to share the poll via link or QR code. It also displays poll creator information and privacy status.
+   *
+   * @param {{ params: Promise<{ id: string }> }} props - The component props containing the poll ID.
+   * @returns {JSX.Element} A React component that renders the detailed view of a poll.
+   */
   const resolvedParams = React.use(params);
   const pollId = resolvedParams.id;
   const [poll, setPoll] = useState<Poll | null>(null);
@@ -42,6 +50,8 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchPoll() {
@@ -49,6 +59,30 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
       setError(null);
       setMessage(null);
 
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id || null);
+
+      if (user) {
+        // Fetch user role
+        const { data: roleData, error: roleError } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (roleData === null) {
+          // If roleData is null, no role was found for this user. This is expected for non-admin users.
+          setCurrentUserRole(null);
+        } else if (roleData) {
+          setCurrentUserRole(roleData.role);
+        } else if (roleError) {
+          // Only log a console error if there's an actual error beyond "no rows found"
+          console.error("Error fetching user role:", roleError);
+          setCurrentUserRole(null);
+        }
+      }
+
+      // Fetch poll data, including options and creator's username
       const { data, error } = await supabase
         .from("polls")
         .select(
@@ -75,6 +109,7 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
         console.error("Error fetching poll:", error);
         setError("Failed to load poll.");
       } else {
+        // Map fetched data to Poll interface, extracting creator_username
         const pollData = data as any; // Use any for initial data to handle nested profiles object
         setPoll({
           ...pollData,
@@ -85,37 +120,46 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
     }
 
     fetchPoll();
-  }, [pollId]);
+  }, [pollId]); // Re-run effect if pollId changes
 
   const handleCopyLink = (pollId: string) => {
+    // Construct the full URL for the poll
     const pollUrl = `${window.location.origin}/polls/${pollId}`;
+    // Copy the URL to the clipboard
     navigator.clipboard.writeText(pollUrl).then(() => {
       setCopyFeedback("Link copied!");
-      setTimeout(() => setCopyFeedback(null), 3000); // Clear feedback after 3 seconds
+      // Clear feedback after 3 seconds
+      setTimeout(() => setCopyFeedback(null), 3000);
     }).catch(() => {
       setCopyFeedback("Failed to copy link.");
-      setTimeout(() => setCopyFeedback(null), 3000); // Clear feedback after 3 seconds
+      // Clear feedback after 3 seconds
+      setTimeout(() => setCopyFeedback(null), 3000);
     });
   };
 
   const handleShareOnTwitter = (pollId: string) => {
+    // Construct the full URL for the poll
     const pollUrl = `${window.location.origin}/polls/${pollId}`;
+    // Encode tweet text and URL for Twitter Web Intent
     const tweetText = encodeURIComponent(`Vote on my poll: ${poll?.question || ""}`);
     const twitterUrl = `https://twitter.com/intent/tweet?text=${tweetText}&url=${encodeURIComponent(pollUrl)}`;
+    // Open Twitter Web Intent in a new window
     window.open(twitterUrl, '_blank');
   };
 
   const handleSubmitVote = async () => {
+    // Ensure an option is selected before submitting a vote
     if (!selectedOption) {
       setMessage("Please select an option to vote.");
       return;
     }
 
+    // Use startTransition for non-blocking UI updates during vote submission
     startTransition(async () => {
+      // Call the server action to submit the vote
       const result = await submitVote(poll!.id, selectedOption);
       setMessage(result.message);
       if (result.message === "Vote submitted successfully!") {
-        // Optionally, re-fetch poll data to show updated results immediately
         // The revalidatePath in the server action should handle this, but can be explicit if needed
         // fetchPoll(); // This would require moving fetchPoll outside useEffect or using useCallback
       }
@@ -154,12 +198,19 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
       {poll.description && <p className="text-muted-foreground">{poll.description}</p>}
 
       <RadioGroup value={selectedOption} onValueChange={setSelectedOption} className="space-y-4">
-        {poll.poll_options.map((option) => (
-          <div key={option.id} className="flex items-center space-x-2">
-            <RadioGroupItem value={option.id} id={`option-${option.id}`} />
-            <Label htmlFor={`option-${option.id}`} className="text-lg">{option.option_text}</Label>
-          </div>
-        ))}
+        {poll.poll_options.map((option) => {
+          const totalVotes = poll.poll_options.reduce((sum, opt) => sum + opt.votes_count, 0);
+          const percentage = totalVotes === 0 ? 0 : Math.round((option.votes_count / totalVotes) * 100);
+          return (
+            <div key={option.id} className="flex items-center space-x-2">
+              <RadioGroupItem value={option.id} id={`option-${option.id}`} />
+              <Label htmlFor={`option-${option.id}`} className="text-lg flex justify-between w-full">
+                <span>{option.option_text}</span>
+                <span className="text-sm text-muted-foreground">{option.votes_count} votes ({percentage}%)</span>
+              </Label>
+            </div>
+          );
+        })}
       </RadioGroup>
 
       <Button onClick={handleSubmitVote} disabled={!selectedOption || isPending}>
@@ -171,6 +222,16 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
         <p>Created by {poll.creator_username}</p>
         <p>Created on {new Date(poll.created_at).toLocaleDateString()}</p>
       </div>
+
+      {(currentUserId === poll.user_id || currentUserRole === 'admin') && (
+        <div className="flex justify-end mt-4">
+          <Button asChild>
+            <Link href={`/polls/${poll.id}/edit`}>
+              Edit Poll
+            </Link>
+          </Button>
+        </div>
+      )}
 
       <div className="border-t pt-6 space-y-4">
         <h2 className="text-xl font-bold">Share this poll</h2>

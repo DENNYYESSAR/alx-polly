@@ -33,6 +33,7 @@ export default function RootLayout({
         <header className="flex justify-between items-center p-4 border-b">
           <div className="text-xl font-bold">ALX Polly</div>
           <nav className="flex gap-4">
+            <Link href="/" className="hover:text-primary">Home</Link>
             <Link href="/polls" className="hover:text-primary">My Polls</Link>
             <Link href="/create-poll" className="hover:text-primary">Create Poll</Link>
           </nav>

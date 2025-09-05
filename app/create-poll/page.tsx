@@ -35,32 +35,6 @@ export default function CreatePollPage() {
     setOptions(newOptions);
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); // Prevent default form submission
-    setMessage("");
-
-    const formData = new FormData(event.currentTarget); // Create FormData from the current form
-    // Add settings from state to formData
-    formData.append("allowMultipleOptions", allowMultipleOptions ? "on" : "off");
-    formData.append("isPrivate", isPrivate ? "on" : "off");
-    if (endsAt) {
-      formData.append("endsAt", endsAt);
-    }
-
-    // Add poll options to formData. createPoll server action will handle parsing.
-    options.forEach((optionText, index) => {
-      formData.append(`option-${index}`, optionText);
-    });
-
-    startTransition(async () => {
-      const result = await createPoll(formData);
-      setMessage(result.message);
-      if (result.message === "Poll created successfully!") {
-        // The redirect is handled by the server action itself for now.
-      }
-    });
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -87,7 +61,31 @@ export default function CreatePollPage() {
               <CardDescription>Enter the details for your new poll</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <form id="create-poll-form" action={handleSubmit} className="space-y-4">
+              <form
+                id="create-poll-form"
+                action={async (formData) => {
+                  setMessage("");
+                  // Append settings from state to formData for the server action.
+                  // These must be set here because client-side state is not directly accessible in the server action.
+                  formData.set("allowMultipleOptions", allowMultipleOptions ? "on" : "off");
+                  formData.set("isPrivate", isPrivate ? "on" : "off");
+                  if (endsAt) {
+                    formData.set("endsAt", endsAt);
+                  }
+                  // Append poll options to formData. The createPoll server action will handle parsing.
+                  // Ensure all options, even empty ones, are passed for consistent indexing.
+                  options.forEach((optionText, index) => {
+                    formData.set(`option-${index}`, optionText);
+                  });
+
+                  startTransition(async () => {
+                    const result = await createPoll(formData);
+                    setMessage(result.message);
+                    // The redirect is handled by the server action itself for now (within createPoll).
+                  });
+                }}
+                className="space-y-4"
+              >
                 <div className="space-y-2">
                   <Label htmlFor="question">Poll Title</Label>
                   <Input

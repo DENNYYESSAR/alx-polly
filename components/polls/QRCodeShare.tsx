@@ -31,7 +31,7 @@ export default function QRCodeShare({ url, pollId }: QRCodeShareProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>QR Code for Poll: {pollId}</CardTitle>
+        <CardTitle>QR Code for this Poll</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-4 p-6">
         <div ref={qrCodeRef}>

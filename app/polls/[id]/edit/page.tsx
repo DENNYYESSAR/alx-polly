@@ -29,6 +29,15 @@ interface PollData {
 }
 
 export default function EditPollPage({ params }: { params: Promise<{ id: string }> }) {
+  /**
+   * @doc EditPollPage component allows users to edit an existing poll's basic information and settings.
+   * This component fetches the poll data for editing, manages local state for poll details and options,
+   * and provides forms for updating the poll question, description, options, and privacy/multiple-choice settings.
+   * It interacts with server actions to persist changes and re-fetches data to ensure UI consistency after updates.
+   *
+   * @param {{ params: Promise<{ id: string }> }} props - The component props containing the poll ID to be edited.
+   * @returns {JSX.Element} A React component that renders the poll editing interface.
+   */
   const resolvedParams = React.use(params);
   const pollId = resolvedParams.id;
   const [poll, setPoll] = useState<PollData | null>(null);
@@ -49,6 +58,7 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
       setError(null);
       setMessage("");
 
+      // Fetch poll data for editing, including options
       const { data, error } = await supabase
         .from("polls")
         .select(
@@ -71,6 +81,7 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
         console.error("Error fetching poll for editing:", error);
         setError("Failed to load poll for editing.");
       } else if (data) {
+        // Set poll data and populate local state for form fields
         setPoll(data as PollData);
         setQuestion(data.question);
         setDescription(data.description || "");
@@ -82,33 +93,41 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
     }
 
     fetchPoll();
-  }, [pollId]);
+  }, [pollId]); // Re-run effect if pollId changes
 
   const handleAddOption = () => {
+    // Add a new empty option to the poll options state
     setOptions([...options, { id: `new-${options.length}`, option_text: "" }]);
   };
 
   const handleRemoveOption = (index: number) => {
+    // Remove an option from the poll options state by index
     setOptions(options.filter((_, i) => i !== index));
   };
 
   const handleOptionChange = (index: number, value: string) => {
+    // Update the text of a specific poll option by index
     const newOptions = [...options];
     newOptions[index].option_text = value;
     setOptions(newOptions);
   };
 
   const handleSubmit = async (formData: FormData) => {
+    // Guard clause: ensure poll data is loaded before submission
     if (!poll) return; // Should not happen if poll is loaded
 
+    // Extract option texts and append to form data for server action
     const updatedOptions = options.map(option => option.option_text);
     formData.append("id", poll.id);
     formData.append("options_json", JSON.stringify(updatedOptions));
 
+    // Use startTransition for non-blocking UI updates during poll update
     startTransition(async () => {
+      // Call the server action to update the poll basic information
       const result = await updatePoll(formData);
       setMessage(result.message);
       if (result.message === "Poll updated successfully!") {
+        // Redirect to polls list after successful update
         router.push("/polls");
       }
     });
@@ -222,12 +241,14 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
             <CardContent className="space-y-4">
               <form id="edit-poll-settings-form" action={async (formData) => {
                 formData.append("id", poll.id);
+                // Use startTransition for non-blocking UI updates during settings update
                 startTransition(async () => {
+                  // Call the server action to update poll settings
                   const result = await updatePollSettings(formData);
                   setMessage(result.message);
                   if (result.message === "Poll settings updated successfully!") {
-                    // Re-fetch poll data to update the UI
-                    // This ensures checkboxes reflect the saved state
+                    // Re-fetch poll data to ensure checkboxes and other UI elements reflect the saved state.
+                    // This is crucial for immediate visual feedback and data consistency.
                     async function refreshPoll() {
                       const { data, error } = await supabase
                         .from("polls")
@@ -251,12 +272,13 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
                         console.error("Error re-fetching poll after settings update:", error);
                         setError("Failed to refresh poll data.");
                       } else if (data) {
+                        // Update local state with fresh poll data
                         setPoll(data as PollData);
                         setAllowMultipleOptions(data.allow_multiple_options);
                         setIsPrivate(data.is_private);
                       }
                     }
-                    refreshPoll();
+                    refreshPoll(); // Execute refresh
                   }
                 });
               }} className="space-y-4">

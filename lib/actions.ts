@@ -10,6 +10,14 @@ interface CreatePollFormState {
 }
 
 // Helper function to initialize Supabase client
+/**
+ * @doc Initializes and returns a Supabase client configured for server-side operations.
+ * This function ensures that the Supabase client can securely interact with the database and authentication services
+ * by retrieving cookies from the incoming request and setting them for Supabase.
+ * It is essential for all server actions that need to access user sessions or protected data.
+ *
+ * @returns {Promise<ReturnType<typeof createServerClient>>} A Promise that resolves to a Supabase client instance.
+ */
 async function getSupabaseClient() {
   const cookieStore = await cookies();
   return createServerClient(
@@ -32,6 +40,16 @@ async function getSupabaseClient() {
 }
 
 export async function createPoll(formData: FormData): Promise<CreatePollFormState> {
+  /**
+   * @doc Creates a new poll with the provided details.
+   * This server action handles the entire poll creation process, including extracting data from the form,
+   * authenticating the user, inserting the poll into the database, and adding its associated options.
+   * It also manages error handling and redirects the user upon successful poll creation.
+   *
+   * @param {FormData} formData - The form data containing the poll question, description, options, and settings (allow multiple options, private, ends at).
+   * @returns {Promise<CreatePollFormState>} An object containing a message indicating the outcome of the operation.
+   *   - `message`: A success message if the poll is created, or an error message if the operation fails.
+   */
   const question = formData.get("question") as string;
   const description = formData.get("description") as string;
   const rawOptions = Array.from({ length: 100 }, (_, i) => formData.get(`option-${i}`) as string)
@@ -97,6 +115,17 @@ interface VoteFormState {
 }
 
 export async function submitVote(pollId: string, optionId: string): Promise<VoteFormState> {
+  /**
+   * @doc Submits a user's vote for a specific poll option.
+   * This server action ensures that only authenticated users can vote and prevents multiple votes from the same user on the same poll.
+   * It records the vote by incrementing the vote count for the chosen option and logs the user's vote in the `votes` table.
+   * The path for the poll is revalidated to reflect the updated vote count.
+   *
+   * @param {string} pollId - The ID of the poll being voted on.
+   * @param {string} optionId - The ID of the option that the user is voting for.
+   * @returns {Promise<VoteFormState>} An object containing a message indicating the outcome of the operation.
+   *   - `message`: A success message if the vote is submitted, or an error message if the operation fails.
+   */
   const supabase = await getSupabaseClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -145,6 +174,15 @@ interface UpdatePollFormState {
 }
 
 export async function updatePoll(formData: FormData): Promise<UpdatePollFormState> {
+  /**
+   * @doc Updates an existing poll's details, including its question, description, options, and settings.
+   * This server action handles updating poll information, including adding new options, deleting old options, and modifying existing poll details.
+   * It ensures that only the poll creator can update their poll and revalidates relevant paths upon successful update.
+   *
+   * @param {FormData} formData - The form data containing the poll ID, updated question, description, options (as JSON string), and settings.
+   * @returns {Promise<UpdatePollFormState>} An object containing a message indicating the outcome of the operation.
+   *   - `message`: A success message if the poll is updated, or an error message if the operation fails.
+   */
   const pollId = formData.get("id") as string;
   const question = formData.get("question") as string;
   const description = formData.get("description") as string;
@@ -229,6 +267,15 @@ interface UpdatePollSettingsFormState {
 }
 
 export async function updatePollSettings(formData: FormData): Promise<UpdatePollSettingsFormState> {
+  /**
+   * @doc Updates the settings (allow multiple options, private) of an existing poll.
+   * This server action specifically handles changes to a poll's privacy and multiple-choice options.
+   * It ensures that only the poll creator can modify these settings and revalidates the poll's path to reflect the changes.
+   *
+   * @param {FormData} formData - The form data containing the poll ID and the updated settings (allowMultipleOptions, isPrivate).
+   * @returns {Promise<UpdatePollSettingsFormState>} An object containing a message indicating the outcome of the operation.
+   *   - `message`: A success message if the settings are updated, or an error message if the operation fails.
+   */
   const pollId = formData.get("id") as string;
   const allowMultipleOptions = formData.get("allowMultipleOptions") === "on";
   const isPrivate = formData.get("isPrivate") === "on";
@@ -268,6 +315,15 @@ interface DeletePollFormState {
 }
 
 export async function deletePoll(pollId: string): Promise<DeletePollFormState> {
+  /**
+   * @doc Deletes a poll from the database.
+   * This server action allows a user to delete a poll they have created.
+   * It ensures that only the poll creator can delete their poll and revalidates the "/polls" path to remove the deleted poll from the list.
+   *
+   * @param {string} pollId - The ID of the poll to be deleted.
+   * @returns {Promise<DeletePollFormState>} An object containing a message indicating the outcome of the operation.
+   *   - `message`: A success message if the poll is deleted, or an error message if the operation fails.
+   */
   const supabase = await getSupabaseClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -299,6 +355,15 @@ interface ForgotPasswordFormState {
 }
 
 export async function sendPasswordResetEmail(email: string): Promise<ForgotPasswordFormState> {
+  /**
+   * @doc Sends a password reset email to the provided email address.
+   * This function is crucial for user account recovery, allowing users to reset their forgotten passwords securely.
+   * It constructs a redirect URL for the password reset form, ensuring the user is directed to the correct page after clicking the link in the email.
+   *
+   * @param {string} email - The email address of the user requesting a password reset.
+   * @returns {Promise<ForgotPasswordFormState>} An object containing a message indicating the outcome of the operation.
+   *   - `message`: A success message if the email is sent, or an error message if the operation fails.
+   */
   const supabase = await getSupabaseClient();
 
   // IMPORTANT: Ensure NEXT_PUBLIC_SITE_URL is set in your .env.local
@@ -320,6 +385,15 @@ interface UpdatePasswordFormState {
 }
 
 export async function updatePassword(newPassword: string): Promise<UpdatePasswordFormState> {
+  /**
+   * @doc Updates the password for the currently authenticated user.
+   * This function is used after a user has successfully navigated to the password reset page via a reset email, or for a logged-in user changing their password.
+   * It securely updates the user's password in the Supabase authentication system.
+   *
+   * @param {string} newPassword - The new password to set for the user.
+   * @returns {Promise<UpdatePasswordFormState>} An object containing a message indicating the outcome of the operation.
+   *   - `message`: A success message if the password is updated, or an error message if the operation fails.
+   */
   const supabase = await getSupabaseClient();
 
   const { data: { user }, error: userError } = await supabase.auth.updateUser({
