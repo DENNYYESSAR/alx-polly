@@ -20,6 +20,28 @@ interface Poll {
   user_id: string; // Add user_id to the interface
 }
 
+// Helper function to fetch user and their role
+async function fetchUserAndRole() {
+  const { data: { user } } = await supabase.auth.getUser();
+  let currentUserRole: string | null = null;
+
+  if (user) {
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single();
+
+    if (roleData) {
+      currentUserRole = roleData.role;
+    } else if (roleError && roleError.code !== 'PGRST116') {
+      // Log other unexpected errors, but suppress "no rows found" (PGRST116)
+      console.error("Error fetching user role:", roleError);
+    }
+  }
+  return { user, currentUserRole };
+}
+
 export default function PollsPage() {
   /**
    * @doc PollsPage component displays a dashboard of polls created by the authenticated user.
@@ -43,25 +65,9 @@ export default function PollsPage() {
       setLoading(true);
       setError(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const { user, currentUserRole } = await fetchUserAndRole();
       setUserId(user?.id || null);
-
-      if (user) {
-        // Fetch user role
-        const { data: roleData, error: roleError } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (roleData) {
-          setCurrentUserRole(roleData.role);
-        } else {
-          // If roleData is null (no role found) or any error, assume default user role.
-          // Avoid logging console.error for expected "no rows found" scenarios.
-          setCurrentUserRole(null);
-        }
-      }
+      setCurrentUserRole(currentUserRole);
 
       let query = supabase
         .from("polls")
@@ -91,7 +97,7 @@ export default function PollsPage() {
     }
 
     fetchPolls();
-  }, [router]); // Dependency array includes router to re-run effect if router changes
+  }, []); // Dependency array includes router to re-run effect if router changes
 
   const handleDelete = async (pollId: string) => {
     // Use startTransition for non-blocking UI updates during deletion
