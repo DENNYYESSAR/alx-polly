@@ -1,0 +1,39 @@
+  # Configuration for automated AI code reviews
+  ai_review:
+    enabled: true
+    auto_review: true
+    auto_incremental_review: true
+
+  # Security scanning via supported tools
+  tools:
+    gitleaks:
+      enabled: true
+    osvScanner:
+      enabled: true
+    semgrep:
+      enabled: true
+    checkov:
+      enabled: true
+
+  # Path-based review rules
+  review_rules:
+    - name: "Auth & Security"
+      paths:
+        - "app/auth/**"
+        - "lib/actions.ts"
+
+  # Use supported pre-merge checks instead of custom severity mapping
+  pre_merge_checks:
+    title:
+      mode: warning
+      requirements: "Title should be concise, descriptive, and must not contain WIP/Draft."
+    description:
+      mode: warning
+    custom_checks:
+      - mode: warning
+        name: "No secrets committed"
+        instructions: "Fail if Gitleaks reports any findings in the diff."
+      - mode: warning
+        name: "No critical vulnerabilities"
+        instructions: "Fail if OSV/Semgrep report critical severity issues introduced by this PR."
+
