@@ -6,12 +6,14 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useRouter } from 'next/navigation';
 import Link from "next/link";
+import { EyeIcon, EyeOffIcon } from "lucide-react"; // Import icons
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // New state for password visibility
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -42,13 +44,24 @@ export default function LoginForm() {
         onChange={(e) => setEmail(e.target.value)}
         required
       />
-      <Input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-      />
+      <div className="relative">
+        <Input
+          type={showPassword ? "text" : "password"} // Conditionally set type
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="absolute right-2 top-1/2 -translate-y-1/2"
+          onClick={() => setShowPassword((prev) => !prev)}
+        >
+          {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />} 
+        </Button>
+      </div>
       <Button type="submit" disabled={loading}>
         {loading ? "Logging in..." : "Login"}
       </Button>

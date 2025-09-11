@@ -62,6 +62,7 @@ export async function createPoll(formData: FormData): Promise<CreatePollFormStat
   const isPrivate = formData.get("isPrivate") === "on";
   const endsAtString = formData.get("endsAt") as string;
   const endsAt = endsAtString ? new Date(endsAtString).toISOString() : null;
+  const allowUnauthenticatedVotes = formData.get("allowUnauthenticatedVotes") === "on"; // Get new field
 
   const supabase = await getSupabaseClient();
 
@@ -85,6 +86,7 @@ export async function createPoll(formData: FormData): Promise<CreatePollFormStat
       allow_multiple_options: allowMultipleOptions,
       is_private: isPrivate,
       ends_at: endsAt,
+      allow_unauthenticated_votes: allowUnauthenticatedVotes, // Save new field
     })
     .select()
     .single();
@@ -105,9 +107,6 @@ export async function createPoll(formData: FormData): Promise<CreatePollFormStat
     await supabase.from("polls").delete().eq("id", poll.id);
     return { message: "Failed to create poll options." };
   }
-
-  revalidatePath("/polls");
-  redirect("/polls");
 }
 
 interface VoteFormState {
@@ -130,23 +129,41 @@ export async function submitVote(pollId: string, optionId: string): Promise<Vote
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) {
-    return { message: "User not authenticated." };
-  }
-
-  const { data: existingVote, error: existingVoteError } = await supabase
-    .from("votes")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("poll_id", pollId)
+  // Fetch poll details to check allow_unauthenticated_votes setting
+  const { data: poll, error: pollError } = await supabase
+    .from("polls")
+    .select("allow_unauthenticated_votes, allow_multiple_options")
+    .eq("id", pollId)
     .single();
 
-  if (existingVoteError && existingVoteError.code !== 'PGRST116') {
-    return { message: "Error checking vote status." };
+  if (pollError || !poll) {
+    return { message: "Poll not found." };
   }
 
-  if (existingVote) {
-    return { message: "You have already voted on this poll." };
+  let userIdToRecord: string | null = null;
+
+  if (user) {
+    userIdToRecord = user.id;
+  } else if (!poll.allow_unauthenticated_votes) {
+    return { message: "User not authenticated. This poll requires login to vote." };
+  }
+
+  // Check for existing vote for authenticated users on single-vote polls
+  if (userIdToRecord && !poll.allow_multiple_options) {
+    const { data: existingVote, error: existingVoteError } = await supabase
+      .from("votes")
+      .select("id")
+      .eq("user_id", userIdToRecord)
+      .eq("poll_id", pollId)
+      .single();
+
+    if (existingVoteError && existingVoteError.code !== 'PGRST116') {
+      return { message: "Error checking vote status." };
+    }
+
+    if (existingVote) {
+      return { message: "You have already voted on this poll." };
+    }
   }
 
   const { error: updateError } = await supabase.rpc('increment_vote', { option_id: optionId });
@@ -156,7 +173,7 @@ export async function submitVote(pollId: string, optionId: string): Promise<Vote
   }
 
   const { error: recordError } = await supabase.from("votes").insert({
-    user_id: user.id,
+    user_id: userIdToRecord,
     poll_id: pollId,
     poll_option_id: optionId,
   });
@@ -165,7 +182,6 @@ export async function submitVote(pollId: string, optionId: string): Promise<Vote
     return { message: "Failed to record vote." };
   }
 
-  revalidatePath(`/polls/${pollId}`);
   return { message: "Vote submitted successfully!" };
 }
 
@@ -279,6 +295,7 @@ export async function updatePollSettings(formData: FormData): Promise<UpdatePoll
   const pollId = formData.get("id") as string;
   const allowMultipleOptions = formData.get("allowMultipleOptions") === "on";
   const isPrivate = formData.get("isPrivate") === "on";
+  const allowUnauthenticatedVotes = formData.get("allowUnauthenticatedVotes") === "on"; // New field
 
   const supabase = await getSupabaseClient();
 
@@ -297,6 +314,7 @@ export async function updatePollSettings(formData: FormData): Promise<UpdatePoll
     .update({
       allow_multiple_options: allowMultipleOptions,
       is_private: isPrivate,
+      allow_unauthenticated_votes: allowUnauthenticatedVotes, // Update new field
     })
     .eq("id", pollId)
     .eq("user_id", user.id);
@@ -327,22 +345,53 @@ export async function deletePoll(pollId: string): Promise<DeletePollFormState> {
   const supabase = await getSupabaseClient();
 
   const { data: { user } } = await supabase.auth.getUser();
+  console.log("deletePoll: User authenticated:", user ? user.id : "No user"); // Debug log
 
   if (!user) {
     return { message: "User not authenticated." };
   }
 
+  // Fetch user role
+  const { data: roleData, error: roleError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle(); // Use maybeSingle to handle cases where no role is found without erroring
+
+  if (roleError) {
+    console.error("Error fetching user role in deletePoll:", JSON.stringify(roleError, null, 2));
+    return { message: "Failed to retrieve user role for deletion." };
+  }
+
+  const currentUserRole = roleData?.role || null;
+  console.log("deletePoll: Current user role:", currentUserRole); // Debug log
+
   if (!pollId) {
     return { message: "Poll ID is missing." };
   }
+  console.log("deletePoll: Attempting to delete poll with ID:", pollId); // Debug log
 
-  const { error } = await supabase
+  let deleteQuery = supabase
     .from("polls")
     .delete()
-    .eq("id", pollId)
-    .eq("user_id", user.id);
+    .eq("id", pollId);
+
+  // If the user is not an admin, restrict deletion to their own polls
+  if (currentUserRole !== 'admin') {
+    deleteQuery = deleteQuery.eq("user_id", user.id);
+  }
+  console.log("deletePoll: Final delete query (conceptual):");
+  // Note: Cannot directly log the query object, but this indicates the logic path.
+  if (currentUserRole !== 'admin') {
+    console.log("  Deleting own poll (user_id check included).");
+  } else {
+    console.log("  Admin deleting any poll (no user_id check included).");
+  }
+
+  const { error } = await deleteQuery;
 
   if (error) {
+    console.error("deletePoll: Supabase deletion error:", JSON.stringify(error, null, 2)); // Detailed error log
     return { message: "Failed to delete poll." };
   }
 

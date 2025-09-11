@@ -25,6 +25,7 @@ interface PollData {
   description: string | null;
   allow_multiple_options: boolean;
   is_private: boolean;
+  allow_unauthenticated_votes: boolean;
   poll_options: PollOption[];
 }
 
@@ -48,6 +49,7 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
   const [options, setOptions] = useState<PollOption[]>([]);
   const [allowMultipleOptions, setAllowMultipleOptions] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [allowUnauthenticatedVotes, setAllowUnauthenticatedVotes] = useState(false); // New state
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -61,24 +63,12 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
       // Fetch poll data for editing, including options
       const { data, error } = await supabase
         .from("polls")
-        .select(
-          `
-          id,
-          question,
-          description,
-          allow_multiple_options,
-          is_private,
-          poll_options(
-            id,
-            option_text
-          )
-        `
-        )
+        .select(`id, question, description, allow_multiple_options, is_private, allow_unauthenticated_votes, poll_options(id, option_text)`)
         .eq("id", pollId)
         .single();
 
       if (error) {
-        console.error("Error fetching poll for editing:", error);
+        console.error("Error fetching poll for editing:", JSON.stringify(error, null, 2));
         setError("Failed to load poll for editing.");
       } else if (data) {
         // Set poll data and populate local state for form fields
@@ -88,6 +78,7 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
         setOptions(data.poll_options);
         setAllowMultipleOptions(data.allow_multiple_options);
         setIsPrivate(data.is_private);
+        setAllowUnauthenticatedVotes(data.allow_unauthenticated_votes); // Set new state
       }
       setLoading(false);
     }
@@ -241,6 +232,10 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
             <CardContent className="space-y-4">
               <form id="edit-poll-settings-form" action={async (formData) => {
                 formData.append("id", poll.id);
+                formData.set("allowMultipleOptions", allowMultipleOptions ? "on" : "off");
+                formData.set("isPrivate", isPrivate ? "on" : "off");
+                formData.set("allowUnauthenticatedVotes", allowUnauthenticatedVotes ? "on" : "off"); // Set new field
+
                 // Use startTransition for non-blocking UI updates during settings update
                 startTransition(async () => {
                   // Call the server action to update poll settings
@@ -252,30 +247,19 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
                     async function refreshPoll() {
                       const { data, error } = await supabase
                         .from("polls")
-                        .select(
-                          `
-                          id,
-                          question,
-                          description,
-                          allow_multiple_options,
-                          is_private,
-                          poll_options(
-                            id,
-                            option_text
-                          )
-                        `
-                        )
+                        .select(`id, question, description, allow_multiple_options, is_private, allow_unauthenticated_votes, poll_options(id, option_text)`)
                         .eq("id", poll.id)
                         .single();
 
                       if (error) {
-                        console.error("Error re-fetching poll after settings update:", error);
+                        console.error("Error re-fetching poll after settings update:", JSON.stringify(error, null, 2));
                         setError("Failed to refresh poll data.");
                       } else if (data) {
                         // Update local state with fresh poll data
                         setPoll(data as PollData);
                         setAllowMultipleOptions(data.allow_multiple_options);
                         setIsPrivate(data.is_private);
+                        setAllowUnauthenticatedVotes(data.allow_unauthenticated_votes); // Update new state
                       }
                     }
                     refreshPoll(); // Execute refresh
@@ -314,9 +298,31 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
                     Make this poll private (only accessible via direct link)
                   </Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="allowUnauthenticatedVotes"
+                    name="allowUnauthenticatedVotes"
+                    className="peer h-4 w-4 shrink-0 rounded-sm border border-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                    checked={allowUnauthenticatedVotes}
+                    onChange={(e) => setAllowUnauthenticatedVotes(e.target.checked)}
+                  />
+                  <Label
+                    htmlFor="allowUnauthenticatedVotes"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Allow unauthenticated users to vote (no login required)
+                  </Label>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="poll-end-date">Poll End Date (Optional)</Label>
-                  <Input id="poll-end-date" type="date" placeholder="dd/mm/yyyy --:--" />
+                  <Input
+                    id="poll-end-date"
+                    type="date"
+                    name="endsAt"
+                    value={poll.ends_at ? new Date(poll.ends_at).toISOString().split('T')[0] : ""}
+                    onChange={(e) => setPoll({ ...poll, ends_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                  />
                 </div>
               </form>
             </CardContent>

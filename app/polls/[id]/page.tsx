@@ -53,72 +53,74 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchPoll() {
-      setLoading(true);
-      setError(null);
-      setMessage(null);
+  async function fetchPoll() {
+    console.log("fetchPoll: Starting data fetch for pollId:", pollId); // Debug log
+    setLoading(true);
+    setError(null);
+    setMessage(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUserId(user?.id || null);
+    const { data: { user } } = await supabase.auth.getUser();
+    setCurrentUserId(user?.id || null);
 
-      if (user) {
-        // Fetch user role
-        const { data: roleData, error: roleError } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (roleData === null) {
-          // If roleData is null, no role was found for this user. This is expected for non-admin users.
-          setCurrentUserRole(null);
-        } else if (roleData) {
-          setCurrentUserRole(roleData.role);
-        } else if (roleError) {
-          // Only log a console error if there's an actual error beyond "no rows found"
-          console.error("Error fetching user role:", roleError);
-          setCurrentUserRole(null);
-        }
-      }
-
-      // Fetch poll data, including options and creator's username
-      const { data, error } = await supabase
-        .from("polls")
-        .select(
-          `
-          id,
-          question,
-          description,
-          created_at,
-          user_id,
-          allow_multiple_options,
-          is_private,
-          poll_options(
-            id,
-            option_text,
-            votes_count
-          ),
-          profiles(username) // Join with profiles table to get username
-        `
-        )
-        .eq("id", pollId)
+    if (user) {
+      // Fetch user role
+      const { data: roleData, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
         .single();
-
-      if (error) {
-        console.error("Error fetching poll:", error);
-        setError("Failed to load poll.");
-      } else {
-        // Map fetched data to Poll interface, extracting creator_username
-        const pollData = data as any; // Use any for initial data to handle nested profiles object
-        setPoll({
-          ...pollData,
-          creator_username: pollData.profiles?.username || "Unknown User",
-        });
+      
+      if (roleData === null) {
+        // If roleData is null, no role was found for this user. This is expected for non-admin users.
+        setCurrentUserRole(null);
+      } else if (roleData) {
+        setCurrentUserRole(roleData.role);
+      } else if (roleError) {
+        // Only log a console error if there's an actual error beyond "no rows found"
+        console.error("Error fetching user role:", roleError);
+        setCurrentUserRole(null);
       }
-      setLoading(false);
     }
 
+    // Fetch poll data, including options and creator's username
+    const { data, error } = await supabase
+      .from("polls")
+      .select(
+        `
+        id,
+        question,
+        description,
+        created_at,
+        user_id,
+        allow_multiple_options,
+        is_private,
+        poll_options(
+          id,
+          option_text,
+          votes_count
+        ),
+        profiles(username) // Join with profiles table to get username
+      `
+      )
+      .eq("id", pollId)
+      .single();
+
+    if (error) {
+      console.error("fetchPoll: Error fetching poll:", error);
+      setError("Failed to load poll.");
+    } else {
+      console.log("fetchPoll: Data received:", data); // Debug log
+      // Map fetched data to Poll interface, extracting creator_username
+      const pollData = data as any; // Use any for initial data to handle nested profiles object
+      setPoll({
+        ...pollData,
+        creator_username: pollData.profiles?.username || "Unknown User",
+      });
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
     fetchPoll();
   }, [pollId]); // Re-run effect if pollId changes
 
@@ -160,8 +162,9 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
       const result = await submitVote(poll!.id, selectedOption);
       setMessage(result.message);
       if (result.message === "Vote submitted successfully!") {
-        // The revalidatePath in the server action should handle this, but can be explicit if needed
-        // fetchPoll(); // This would require moving fetchPoll outside useEffect or using useCallback
+        await fetchPoll(); // Re-fetch poll data to show updated results
+        console.log("handleSubmitVote: Poll state after fetchPoll:", poll); // Debug log
+        router.refresh(); // Still call router.refresh() for good measure, though fetchPoll should handle direct state update
       }
     });
   };

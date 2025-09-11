@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Link from "next/link";
-import AuthStatusClientComponent from "@/components/auth/AuthStatusClientComponent";
+import AuthNav from "@/components/navigation/AuthNav"; // Import the new AuthNav component
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,12 +31,7 @@ export default function RootLayout({
       >
         <header className="flex justify-between items-center p-4 border-b">
           <div className="text-xl font-bold">ALX Polly</div>
-          <nav className="flex gap-4">
-            <Link href="/" className="hover:text-primary">Home</Link>
-            <Link href="/polls" className="hover:text-primary">My Polls</Link>
-            <Link href="/create-poll" className="hover:text-primary">Create Poll</Link>
-          </nav>
-          <AuthStatusClientComponent />
+          <AuthNav /> {/* Use the AuthNav component here */}
         </header>
         <main className="flex-grow container mx-auto p-4">
           {children}

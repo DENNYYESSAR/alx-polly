@@ -18,6 +18,7 @@ export default function CreatePollPage() {
   const [allowMultipleOptions, setAllowMultipleOptions] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [endsAt, setEndsAt] = useState<string | null>(null); // New state for end date
+  const [allowUnauthenticatedVotes, setAllowUnauthenticatedVotes] = useState(false); // New state for unauthenticated votes
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
 
@@ -69,6 +70,7 @@ export default function CreatePollPage() {
                   // These must be set here because client-side state is not directly accessible in the server action.
                   formData.set("allowMultipleOptions", allowMultipleOptions ? "on" : "off");
                   formData.set("isPrivate", isPrivate ? "on" : "off");
+                  formData.set("allowUnauthenticatedVotes", allowUnauthenticatedVotes ? "on" : "off"); // Set new field
                   if (endsAt) {
                     formData.set("endsAt", endsAt);
                   }
@@ -130,6 +132,16 @@ export default function CreatePollPage() {
                     <Plus className="mr-2 h-4 w-4" /> Add Option
                   </Button>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="poll-end-date">Poll End Date (Optional)</Label>
+                  <Input
+                    id="poll-end-date"
+                    type="date"
+                    name="endsAt"
+                    value={endsAt || ""}
+                    onChange={(e) => setEndsAt(e.target.value)}
+                  />
+                </div>
               </form>
             </CardContent>
             <CardFooter className="flex justify-end">
@@ -179,6 +191,22 @@ export default function CreatePollPage() {
                     Make this poll private (only accessible via direct link)
                   </Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="allowUnauthenticatedVotes"
+                    name="allowUnauthenticatedVotes"
+                    className="peer h-4 w-4 shrink-0 rounded-sm border border-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                    checked={allowUnauthenticatedVotes}
+                    onChange={(e) => setAllowUnauthenticatedVotes(e.target.checked)}
+                  />
+                  <Label
+                    htmlFor="allowUnauthenticatedVotes"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Allow unauthenticated users to vote (no login required)
+                  </Label>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="poll-end-date">Poll End Date (Optional)</Label>
                   <Input
@@ -192,8 +220,8 @@ export default function CreatePollPage() {
               </form>
             </CardContent>
             <CardFooter className="flex justify-end">
-              <Button type="submit" form="create-poll-settings-form" disabled={isPending}>
-                {isPending ? "Saving Settings..." : "Save Settings"}
+              <Button type="submit" form="create-poll-form" disabled={isPending}>
+                {isPending ? "Creating..." : "Create Poll"}
               </Button>
             </CardFooter>
           </Card>

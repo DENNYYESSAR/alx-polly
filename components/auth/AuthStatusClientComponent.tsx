@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, ReactNode } from "react";
 import { useRouter } from 'next/navigation';
 import { Session } from '@supabase/supabase-js';
 import Link from "next/link";
@@ -8,18 +8,25 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabaseClient";
 
-export default function AuthStatusClientComponent() {
+interface AuthStatusClientComponentProps {
+  children: (isAuthenticated: boolean, session: Session | null) => ReactNode;
+}
+
+export default function AuthStatusClientComponent({ children }: AuthStatusClientComponentProps) {
   const [session, setSession] = useState<Session | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      setIsAuthenticated(!!session);
       console.log("AuthStatusClientComponent: Initial session", session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setIsAuthenticated(!!session);
       console.log("AuthStatusClientComponent: Auth state change", _event, session);
     });
 
@@ -31,21 +38,5 @@ export default function AuthStatusClientComponent() {
     router.push("/auth");
   };
 
-  return (
-    <div className="flex items-center gap-4">
-      {session ? (
-        <Button onClick={handleLogout} variant="outline">
-          Logout
-        </Button>
-      ) : (
-        <Button asChild>
-          <Link href="/auth">Login</Link>
-        </Button>
-      )}
-      <Avatar>
-        <AvatarImage src={session?.user?.user_metadata.avatar_url || ""} />
-        <AvatarFallback>{session?.user?.email ? session.user.email[0].toUpperCase() : "U"}</AvatarFallback>
-      </Avatar>
-    </div>
-  );
+  return children(isAuthenticated, session); // Render children with isAuthenticated and session
 }
