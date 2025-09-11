@@ -1,7 +1,26 @@
+"use client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { supabase } from "../lib/supabaseClient"; // Corrected import path
+import { useEffect, useState } from "react";
 
 export default function Home() {
+  const [isClient, setIsClient] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Removed: const supabase = createClient(); // `supabase` is already the client instance
+
+  useEffect(() => {
+    setIsClient(true);
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsAuthenticated(!!session);
+    };
+    checkAuth();
+  }, []);
+
+  if (!isClient) {
+    return null; // Or a loading spinner
+  }
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-100 to-indigo-200 text-gray-800 p-4 sm:p-8">
       <header className="text-center mb-12">
@@ -33,11 +52,13 @@ export default function Home() {
       </section>
 
       <div className="flex flex-col sm:flex-row gap-4 animate-fade-in-up-delay">
-        <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white text-lg px-8 py-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
-          <Link href="/auth">
-            Login / Sign Up
-          </Link>
-        </Button>
+        {!isAuthenticated && (
+          <Button asChild className="bg-indigo-600 hover:bg-indigo-700 text-white text-lg px-8 py-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
+            <Link href="/auth">
+              Login / Sign Up
+            </Link>
+          </Button>
+        )}
         <Button asChild variant="outline" className="bg-white hover:bg-gray-100 text-indigo-600 border-indigo-600 text-lg px-8 py-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105">
           <Link href="/polls">
             View Public Polls
