@@ -40,7 +40,7 @@ async function fetchUserAndRole() {
       currentUserRole = null;
     } else if (roleData) {
       currentUserRole = roleData.role;
-    } else if (roleError && roleError.code !== 'PGRST116') {
+    } else if (roleError && typeof roleError === 'object' && 'code' in roleError && (roleError as any).code !== 'PGRST116') {
       // Log other unexpected errors, but suppress "no rows found" (PGRST116)
       console.error("Error fetching user role:", roleError);
     }
@@ -92,9 +92,9 @@ export default function PollsPage() {
     }
   };
 
-  async function fetchPolls() {
-    setLoading(true);
-    setError(null);
+    async function fetchPolls() {
+      setLoading(true);
+      setError(null);
 
     const { user, currentUserRole } = await fetchUserAndRole();
     setUserId(user?.id || null);
@@ -103,49 +103,30 @@ export default function PollsPage() {
     let userPolls: Poll[] = [];
     let publicVisiblePolls: Poll[] = [];
 
+    // Always fetch all public polls first
+    const { data: allPublicPollsData, error: allPublicPollsError } = await supabase
+      .from("polls")
+      .select("id, question, description, created_at, ends_at, is_private, user_id, poll_options(id, option_text, votes_count)")
+      .eq("is_private", false)
+      .order("created_at", { ascending: false });
+
+    if (allPublicPollsError) {
+      console.error("Error fetching all public polls:", JSON.stringify(allPublicPollsError, null, 2));
+      setError("Failed to load public polls.");
+      setLoading(false);
+      return; // Exit early if cannot load any public polls
+    }
+
+    const allPublicPolls = (allPublicPollsData || []) as Poll[];
+
     if (user) {
-      // Fetch polls created by the current user
-      const { data: myPollsData, error: myPollsError } = await supabase
-        .from("polls")
-        .select("id, question, description, created_at, ends_at, is_private, user_id, poll_options(id, option_text, votes_count)")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (myPollsError) {
-        console.error("Error fetching user polls:", JSON.stringify(myPollsError, null, 2));
-        setError("Failed to load your polls.");
-      } else {
-        userPolls = myPollsData as Poll[];
-      }
-
-      // Fetch public polls not created by the current user
-      const { data: publicData, error: publicError } = await supabase
-        .from("polls")
-        .select("id, question, description, created_at, ends_at, is_private, user_id, poll_options(id, option_text, votes_count)")
-        .eq("is_private", false)
-        .neq("user_id", user.id) // Exclude user's own polls from public list
-        .order("created_at", { ascending: false });
-
-      if (publicError) {
-        console.error("Error fetching public polls:", JSON.stringify(publicError, null, 2));
-        setError((prev) => (prev ? prev + " And failed to load public polls." : "Failed to load public polls."));
-      } else {
-        publicVisiblePolls = publicData as Poll[];
-      }
+      // Filter user's own polls from all public polls
+      userPolls = allPublicPolls.filter(poll => poll.user_id === user.id);
+      // Filter public polls not created by the current user
+      publicVisiblePolls = allPublicPolls.filter(poll => poll.user_id !== user.id);
     } else {
-      // If not authenticated, fetch all public polls
-      const { data: publicData, error: publicError } = await supabase
-        .from("polls")
-        .select("id, question, description, created_at, ends_at, is_private, user_id, poll_options(id, option_text, votes_count)")
-        .eq("is_private", false)
-        .order("created_at", { ascending: false });
-
-      if (publicError) {
-        console.error("Error fetching public polls:", JSON.stringify(publicError, null, 2));
-        setError("Failed to load public polls.");
-      } else {
-        publicVisiblePolls = publicData as Poll[];
-      }
+      // If not authenticated, all fetched public polls are visible public polls
+      publicVisiblePolls = allPublicPolls;
     }
 
     setMyPolls(userPolls);
@@ -186,10 +167,10 @@ export default function PollsPage() {
       {userId && (
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold">My Polls</h1>
-          <Button asChild>
-            <Link href="/create-poll">Create New Poll</Link>
-          </Button>
-        </div>
+        <Button asChild>
+          <Link href="/create-poll">Create New Poll</Link>
+        </Button>
+      </div>
       )}
 
       {userId && myPolls.length === 0 && (
@@ -352,43 +333,43 @@ export default function PollsPage() {
                   <p className="text-xs text-foreground/70">Created on {new Date(poll.created_at).toLocaleDateString()}</p>
                   <p className="text-xs text-foreground/70">{getRemainingDays(poll.ends_at)}</p>
                   {(userId === poll.user_id || currentUserRole === 'admin') && (
-                    <div className="flex gap-2">
+                  <div className="flex gap-2">
                       <Button variant="outline" size="icon" asChild aria-label="Edit poll" className="hover:bg-primary/10">
-                        <Link href={`/polls/${poll.id}/edit`}>
+                      <Link href={`/polls/${poll.id}/edit`}>
                           <FaEdit className="h-4 w-4" />
-                        </Link>
-                      </Button>
-                      <Dialog>
-                        <DialogTrigger asChild>
+                      </Link>
+                    </Button>
+                    <Dialog>
+                      <DialogTrigger asChild>
                           <Button variant="destructive" size="icon" onClick={() => setDeletingId(poll.id)} aria-label="Delete poll" className="hover:bg-destructive/10">
                             <FaTrash className="h-4 w-4" />
-                          </Button>
-                        </DialogTrigger>
-                        {deletingId === poll.id && (
+                        </Button>
+                      </DialogTrigger>
+                      {deletingId === poll.id && (
                           <DialogContent className="sm:max-w-[425px]">
-                            <DialogHeader>
+                          <DialogHeader>
                               <DialogTitle>Confirm Deletion</DialogTitle>
-                              <DialogDescription>
-                                This action cannot be undone. This will permanently delete your poll
-                                and remove its data from our servers.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter>
-                              <DialogClose asChild>
-                                <Button variant="outline" onClick={() => setDeletingId(null)}>Cancel</Button>
-                              </DialogClose>
-                              <Button
-                                variant="destructive"
-                                onClick={() => handleDelete(poll.id)}
-                                disabled={isPending}
-                              >
-                                {isPending ? "Deleting..." : "Delete"}
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        )}
-                      </Dialog>
-                    </div>
+                            <DialogDescription>
+                              This action cannot be undone. This will permanently delete your poll
+                              and remove its data from our servers.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <DialogFooter>
+                            <DialogClose asChild>
+                              <Button variant="outline" onClick={() => setDeletingId(null)}>Cancel</Button>
+                            </DialogClose>
+                            <Button
+                              variant="destructive"
+                              onClick={() => handleDelete(poll.id)}
+                              disabled={isPending}
+                            >
+                              {isPending ? "Deleting..." : "Delete"}
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      )}
+                    </Dialog>
+                  </div>
                   )}
                 </CardFooter>
               </Card>

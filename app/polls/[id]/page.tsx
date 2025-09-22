@@ -45,6 +45,7 @@ interface Comment {
   user_email: string | null;
   content: string;
   created_at: string;
+  profiles?: { first_name: string | null } | null; // Add profiles with first_name
 }
 
 export default function ViewPollPage({ params }: { params: Promise<{ id: string }> }) {
@@ -116,12 +117,12 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
           option_text,
           votes_count
         ),
-        comments(id, user_id, content, created_at),
-        profiles(username) // Join with profiles table to get username
+        comments(id, user_id, content, created_at, profiles(first_name)),
+        profiles(username)
       `
       )
       .eq("id", pollId)
-      .single();
+      .single(); // Removed .options({ cache: 'no-store' })
 
     if (error) {
       console.error("fetchPoll: Error fetching poll:", JSON.stringify(error, null, 2));
@@ -185,6 +186,13 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
         router.refresh(); // Still call router.refresh() for good measure, though fetchPoll should handle direct state update
       }
     });
+  };
+
+  const handleCommentDeleted = async () => {
+    console.log("handleCommentDeleted: Comment deleted, re-fetching poll and refreshing router.");
+    await fetchPoll(); // Re-fetch poll data to update comments list
+    router.refresh(); // Force a full refresh of the page to ensure comments are up-to-date
+    window.location.reload(); // Temporary: Force a full page reload to confirm persistent deletion
   };
 
   if (loading) {
@@ -274,7 +282,7 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
             <CardTitle className="text-2xl font-semibold">Comments</CardTitle>
           </CardHeader>
           <CardContent>
-            <PollComments pollId={poll.id} initialComments={poll.comments} />
+            <PollComments pollId={poll.id} initialComments={poll.comments} onCommentDeleted={handleCommentDeleted} />
           </CardContent>
         </Card>
       )}

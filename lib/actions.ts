@@ -414,11 +414,30 @@ export async function submitComment(
 ) {
   const supabase = await getSupabaseClient();
 
-  const { error } = await supabase.from("comments").insert({
+  // Get the authenticated user to retrieve their email
+  const { data: { user }, error: userAuthError } = await supabase.auth.getUser();
+  if (userAuthError || !user) {
+    console.error("Error getting user for comment submission:", userAuthError);
+    throw new Error("User not authenticated for comment submission.");
+  }
+
+  // Fetch the user's first name from the profiles table
+  const { data: profileData, error: profileError } = await supabase
+    .from('profiles')
+    .select('first_name')
+    .eq('id', userId)
+    .single();
+
+  if (profileError) {
+    console.error("Error fetching user profile for comment:", profileError);
+    throw new Error("Failed to fetch user profile for comment.");
+  }
+
+  const { data: commentData, error } = await supabase.from("comments").insert({
     poll_id: pollId,
     user_id: userId,
     content: content,
-  });
+  }).select("id, user_id, content, created_at").single(); // Select the inserted comment data
 
   if (error) {
     console.error("Error submitting comment:", error);
@@ -426,6 +445,75 @@ export async function submitComment(
   }
 
   revalidatePath(`/polls/${pollId}`);
+  return { 
+    ...commentData, 
+    user_email: user.email, // Include user email
+    profiles: { first_name: profileData.first_name }
+  };
+}
+
+interface DeleteCommentFormState {
+  message: string;
+}
+
+export async function deleteComment(commentId: string, pollId: string): Promise<DeleteCommentFormState> {
+  const supabase = await getSupabaseClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  console.log("deleteComment: Attempting to delete comment ID:", commentId, "for poll ID:", pollId, "by user:", user?.id);
+
+  if (!user) {
+    console.log("deleteComment: User not authenticated.");
+    return { message: "User not authenticated." };
+  }
+
+  // Fetch user role
+  const { data: roleData, error: roleError } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (roleError) {
+    console.error("deleteComment: Error fetching user role:", JSON.stringify(roleError, null, 2));
+    return { message: "Failed to retrieve user role for comment deletion." };
+  }
+
+  const currentUserRole = roleData?.role || null;
+  console.log("deleteComment: User role:", currentUserRole);
+
+  if (!commentId) {
+    console.log("deleteComment: Comment ID is missing.");
+    return { message: "Comment ID is missing." };
+  }
+
+  let deleteQuery = supabase
+    .from("comments")
+    .delete()
+    .eq("id", commentId);
+
+  // If the user is not an admin, restrict deletion to their own comments
+  if (currentUserRole !== 'admin') {
+    console.log("deleteComment: User is not admin, restricting deletion to own comment.");
+    deleteQuery = deleteQuery.eq("user_id", user.id);
+  }
+
+  console.log("deleteComment: Executing delete query with conditions:", {
+    commentId: commentId,
+    userId: currentUserRole !== 'admin' ? user.id : 'N/A (admin)',
+    role: currentUserRole,
+  });
+
+  const { error } = await deleteQuery;
+
+  if (error) {
+    console.error("deleteComment: Supabase deletion error:", JSON.stringify(error, null, 2));
+    return { message: "Failed to delete comment." };
+  }
+
+  console.log("deleteComment: Comment successfully deleted. Revalidating path:", `/polls/${pollId}`);
+  revalidatePath(`/polls/${pollId}`);
+  return { message: "Comment deleted successfully!" };
 }
 
 interface ForgotPasswordFormState {

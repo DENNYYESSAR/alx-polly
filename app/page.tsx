@@ -25,7 +25,7 @@ export default function Home() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-100 to-indigo-200 text-gray-800 p-4 sm:p-8">
       <header className="text-center mb-12">
         <h1 className="text-5xl sm:text-6xl font-extrabold text-indigo-700 mb-4 animate-fade-in-down">
-          Welcome to ALX Polly
+          Welcome to Polly
         </h1>
         <p className="text-xl sm:text-2xl text-gray-700 max-w-2xl mx-auto animate-fade-in-up">
           Create engaging polls, share them with unique links and QR codes,

@@ -44,6 +44,9 @@ export default function AuthNav() {
             <Link href="/create-poll" className="text-sm font-medium transition-colors hover:text-primary">
               Create Poll
             </Link>
+            <Link href="/profile" className="text-sm font-medium transition-colors hover:text-primary">
+              Profile
+            </Link>
           </>
         )}
       </nav>
@@ -74,10 +77,16 @@ export default function AuthNav() {
           </Button>
         )}
 
-        <Avatar className="h-8 w-8">
-          <AvatarImage src={session?.user?.user_metadata.avatar_url || ""} />
-          <AvatarFallback>{session?.user?.email ? session.user.email[0].toUpperCase() : "U"}</AvatarFallback>
-        </Avatar>
+        <Link href="/profile">
+          <Avatar className="h-8 w-8 cursor-pointer">
+            <AvatarImage src={session?.user?.user_metadata.avatar_url || ""} />
+            <AvatarFallback>
+              {session?.user?.user_metadata.first_name && session?.user?.user_metadata.last_name
+                ? `${String(session.user.user_metadata.first_name).charAt(0)}${String(session.user.user_metadata.last_name).charAt(0)}`.toUpperCase()
+                : (session?.user?.email ? session.user.email[0].toUpperCase() : "U")}
+            </AvatarFallback>
+          </Avatar>
+        </Link>
 
         <div className="sm:hidden">
           <DropdownMenu>
@@ -98,6 +107,9 @@ export default function AuthNav() {
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/create-poll">Create Poll</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/profile">Profile</Link>
                   </DropdownMenuItem>
                 </>
               )}

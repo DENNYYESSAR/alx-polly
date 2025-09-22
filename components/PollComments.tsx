@@ -9,6 +9,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
+import { FaTrash } from 'react-icons/fa'; // Import the trash icon
+import { deleteComment } from '@/lib/actions'; // Import the deleteComment action
 
 interface Comment {
   id: string;
@@ -16,24 +18,22 @@ interface Comment {
   user_email: string | null; // This will be used if we can fetch user emails
   content: string;
   created_at: string;
+  profiles?: { first_name: string | null } | null; // Add profiles with first_name
 }
 
 interface PollCommentsProps {
   pollId: string;
   initialComments: Comment[];
+  onCommentDeleted: () => void; // New callback prop
 }
 
-export default function PollComments({ pollId, initialComments }: PollCommentsProps) {
-  const { isAuthenticated, userId, session } = useAuth();
+export default function PollComments({ pollId, initialComments, onCommentDeleted }: PollCommentsProps) {
+  const { isAuthenticated, userId, session, currentUserRole } = useAuth(); // Get currentUserRole
   const [comments, setComments] = useState<Comment[]>(initialComments);
   const [newComment, setNewComment] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // This effect would re-fetch comments if pollId changes, but given the current architecture
-  // and how initialComments is passed, it might not be strictly necessary if comments are
-  // always provided up-to-date from the parent Server Component.
-  // However, keeping it for completeness if dynamic comment loading were introduced.
   useEffect(() => {
     setComments(initialComments);
   }, [initialComments]);
@@ -52,11 +52,19 @@ export default function PollComments({ pollId, initialComments }: PollCommentsPr
     setError(null);
     startTransition(async () => {
       try {
-        // The server action will revalidate the path, causing a refresh
-        // of the parent component which will then pass updated comments.
-        await submitComment(pollId, userId, newComment);
+        // Call the server action and get the returned comment data
+        const newCommentData = await submitComment(pollId, userId, newComment);
+
+        // Optimistically update the UI with the new comment, including the first_name and user_email
+        setComments(currentComments => [
+          { 
+            ...newCommentData,
+            user_email: newCommentData.user_email || session?.user?.email || null, // Ensure user_email is present
+            profiles: newCommentData.profiles // Ensure profiles is included
+          } as Comment, // Assert to Comment type
+          ...currentComments
+        ]);
         setNewComment("");
-        // After submission, rely on parent component's revalidation and re-fetch to update comments state
       } catch (err) {
         console.error("Failed to submit comment:", err);
         setError("Failed to submit comment.");
@@ -64,10 +72,31 @@ export default function PollComments({ pollId, initialComments }: PollCommentsPr
     });
   };
 
-  // Helper to get initials for avatar fallback
-  const getInitials = (email: string | null) => {
-    if (!email) return "U"; // Unknown user
-    return email.split('@')[0].substring(0, 2).toUpperCase();
+  const handleDeleteComment = async (commentId: string) => {
+    // Ask for confirmation before deleting
+    if (!confirm("Are you sure you want to delete this comment?")) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const result = await deleteComment(commentId, pollId);
+        if (result.message === "Comment deleted successfully!") {
+          // Optimistically update the UI
+          setComments(currentComments => currentComments.filter(comment => comment.id !== commentId));
+          onCommentDeleted(); // Call the callback after successful deletion
+        }
+        alert(result.message);
+      } catch (err) {
+        console.error("Failed to delete comment:", err);
+        alert("Failed to delete comment.");
+      }
+    });
+  };
+
+  const getInitials = (name: string | null) => {
+    if (!name) return "U";
+    return name.substring(0, 2).toUpperCase();
   };
 
   return (
@@ -78,12 +107,23 @@ export default function PollComments({ pollId, initialComments }: PollCommentsPr
         {comments.map((comment) => (
           <div key={comment.id} className="flex items-start space-x-4">
             <Avatar>
-              <AvatarFallback>{getInitials(comment.user_email)}</AvatarFallback>
+              <AvatarFallback>{comment.profiles?.first_name ? getInitials(comment.profiles.first_name) : "U"}</AvatarFallback>
             </Avatar>
             <div className="flex-grow">
               <div className="flex items-center space-x-2">
-                <p className="text-sm font-semibold">{comment.user_email || "Anonymous"}</p>
+                <p className="text-sm font-semibold">{comment.profiles?.first_name || "Anonymous"}</p>
                 <span className="text-xs text-muted-foreground">{new Date(comment.created_at).toLocaleString()}</span>
+                {(userId === comment.user_id || currentUserRole === 'admin') && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteComment(comment.id)}
+                    className="text-red-500 hover:text-red-700"
+                    disabled={isPending}
+                  >
+                    <FaTrash className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
               <p className="text-sm text-foreground mt-1">{comment.content}</p>
             </div>
@@ -94,7 +134,7 @@ export default function PollComments({ pollId, initialComments }: PollCommentsPr
       {isAuthenticated ? (
         <form onSubmit={handleSubmitComment} className="flex items-start space-x-4 mt-6">
           <Avatar>
-            <AvatarFallback>{session?.user?.email ? getInitials(session.user.email) : "U"}</AvatarFallback>
+            <AvatarFallback>{session?.user?.user_metadata?.first_name ? getInitials(session.user.user_metadata.first_name as string) : "U"}</AvatarFallback>
           </Avatar>
           <div className="flex-grow space-y-2">
             <Textarea
