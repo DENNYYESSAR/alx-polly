@@ -39,76 +39,9 @@ Follow these steps to set up and run the ALX Polly application locally.
     *   Note down your Project URL and Anon Key from your project settings (`Settings -> API`).
 
 2.  **Set up Database Schema**:
-    *   You will need to create the necessary tables for `profiles`, `polls`, `poll_options`, and `votes`.
-    *   For `profiles`, `polls`, `poll_options`, and `votes` tables, ensure Row Level Security (RLS) is enabled and policies are configured to allow users to `INSERT`, `SELECT`, `UPDATE`, and `DELETE` their own data where appropriate, and `SELECT` public polls.
-
-    Here's a basic schema for reference (you might need more detailed policies and foreign key constraints):
-
-    ```sql
-    -- profiles table (for user usernames)
-    create table profiles (
-      id uuid references auth.users not null primary key,
-      username text unique,
-      avatar_url text
-    );
-
-    -- polls table
-    create table polls (
-      id uuid primary key default uuid_generate_v4(),
-      user_id uuid references auth.users(id) on delete cascade not null,
-      question text not null,
-      description text,
-      created_at timestamp with time zone default now(),
-      allow_multiple_options boolean default false,
-      is_private boolean default false,
-      ends_at timestamp with time zone
-    );
-
-    -- poll_options table
-    create table poll_options (
-      id uuid primary key default uuid_generate_v4(),
-      poll_id uuid references polls(id) on delete cascade not null,
-      option_text text not null,
-      votes_count integer default 0
-    );
-
-    -- votes table
-    create table votes (
-      id uuid primary key default uuid_generate_v4(),
-      user_id uuid references auth.users(id) on delete cascade not null,
-      poll_id uuid references polls(id) on delete cascade not null,
-      poll_option_id uuid references poll_options(id) on delete cascade not null,
-      created_at timestamp with time zone default now(),
-      unique (user_id, poll_id) -- Prevents multiple votes from the same user on the same poll
-    );
-
-    -- RLS policies example (you'll need to create proper ones for all tables)
-    -- Enable RLS on all tables
-    ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE polls ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE poll_options ENABLE ROW LEVEL SECURITY;
-    ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
-
-    -- Profiles Table Policies
-    CREATE POLICY "Public profiles are viewable by everyone." ON profiles FOR SELECT USING (true);
-    CREATE POLICY "Users can insert their own profile." ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
-    CREATE POLICY "Users can update own profile." ON profiles FOR UPDATE USING (auth.uid() = id);
-
-    -- Polls Table Policies
-    CREATE POLICY "Enable read access for all users" ON polls FOR SELECT USING (true);
-    CREATE POLICY "Enable insert for authenticated users only" ON polls FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-    CREATE POLICY "Enable update for users based on user_id" ON polls FOR UPDATE USING (auth.uid() = user_id);
-    CREATE POLICY "Enable delete for users based on user_id" ON polls FOR DELETE USING (auth.uid() = user_id);
-
-    -- Poll Options Table Policies
-    CREATE POLICY "Enable read access for all users" ON poll_options FOR SELECT USING (true);
-    CREATE POLICY "Enable insert for authenticated users only" ON poll_options FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-    -- Add update and delete policies as needed
-
-    -- Votes Table Policies
-    CREATE POLICY "Enable read access for all users" ON votes FOR SELECT USING (true);
-    CREATE POLICY "Enable insert for authenticated users only" ON votes FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-    ```
+    *   You will need to create the necessary tables for `profiles`, `polls`, `poll_options`, `votes`, `user_roles`, and `comments`.
+    *   The complete database schema, including table definitions, primary keys, foreign key constraints, and Row Level Security (RLS) policies, can be found in the `supabase/schema.sql` file.
+    *   Refer to `supabase/queries.sql` for a collection of SQL queries used throughout the application, including RLS policy examples.
 
 ### 2. Environment Variables
 

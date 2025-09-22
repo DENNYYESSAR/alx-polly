@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, X } from "lucide-react";
+import { FaPlus, FaTimes } from "react-icons/fa";
 import { createPoll } from "@/lib/actions";
 
 export default function CreatePollPage() {
@@ -37,31 +37,31 @@ export default function CreatePollPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Create New Poll</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" asChild>
+    <div className="space-y-6 max-w-2xl mx-auto py-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-3xl sm:text-4xl font-bold">Create New Poll</h1>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" asChild className="flex-grow sm:flex-none">
             <Link href="/polls">Cancel</Link>
           </Button>
-          <Button type="submit" form="create-poll-form" disabled={isPending}>
+          <Button type="submit" form="create-poll-form" disabled={isPending} className="flex-grow sm:flex-none">
             {isPending ? "Creating..." : "Create Poll"}
           </Button>
         </div>
       </div>
 
       <Tabs defaultValue="basic-info" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-2 h-10">
           <TabsTrigger value="basic-info">Basic Info</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
-        <TabsContent value="basic-info">
+        <TabsContent value="basic-info" className="mt-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="border-b pb-4">
               <CardTitle>Poll Information</CardTitle>
               <CardDescription>Enter the details for your new poll</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="pt-6 space-y-6">
               <form
                 id="create-poll-form"
                 action={async (formData) => {
@@ -86,7 +86,7 @@ export default function CreatePollPage() {
                     // The redirect is handled by the server action itself for now (within createPoll).
                   });
                 }}
-                className="space-y-4"
+                className="space-y-6"
               >
                 <div className="space-y-2">
                   <Label htmlFor="question">Poll Title</Label>
@@ -122,14 +122,14 @@ export default function CreatePollPage() {
                         required
                       />
                       {options.length > 2 && (
-                        <Button variant="ghost" size="icon" onClick={() => handleRemoveOption(index)}>
-                          <X className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" onClick={() => handleRemoveOption(index)} aria-label="Remove option" className="hover:bg-destructive/10 text-destructive">
+                          <FaTimes className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
                   ))}
-                  <Button type="button" variant="outline" onClick={handleAddOption} className="mt-2">
-                    <Plus className="mr-2 h-4 w-4" /> Add Option
+                  <Button type="button" variant="outline" onClick={handleAddOption} className="mt-2 w-full sm:w-auto">
+                    <FaPlus className="mr-2 h-4 w-4" /> Add Option
                   </Button>
                 </div>
                 <div className="space-y-2">
@@ -140,25 +140,37 @@ export default function CreatePollPage() {
                     name="endsAt"
                     value={endsAt || ""}
                     onChange={(e) => setEndsAt(e.target.value)}
+                    className="w-full"
                   />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="allowUnauthenticatedVotes"
+                    name="allowUnauthenticatedVotes"
+                    className="peer h-4 w-4 shrink-0 rounded-sm border border-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                    checked={allowUnauthenticatedVotes}
+                    onChange={(e) => setAllowUnauthenticatedVotes(e.target.checked)}
+                  />
+                  <Label
+                    htmlFor="allowUnauthenticatedVotes"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Allow unauthenticated users to vote (no login required)
+                  </Label>
                 </div>
               </form>
             </CardContent>
-            <CardFooter className="flex justify-end">
-              <Button type="submit" form="create-poll-form" disabled={isPending}>
-                {isPending ? "Creating..." : "Create Poll"}
-              </Button>
-            </CardFooter>
           </Card>
         </TabsContent>
-        <TabsContent value="settings">
+        <TabsContent value="settings" className="mt-4">
           <Card>
-            <CardHeader>
+            <CardHeader className="border-b pb-4">
               <CardTitle>Poll Settings</CardTitle>
               <CardDescription>Configure additional options for your poll</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <form id="create-poll-settings-form" className="space-y-4">
+            <CardContent className="pt-6 space-y-6">
+              <form id="create-poll-settings-form" className="space-y-6">
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -191,43 +203,16 @@ export default function CreatePollPage() {
                     Make this poll private (only accessible via direct link)
                   </Label>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="allowUnauthenticatedVotes"
-                    name="allowUnauthenticatedVotes"
-                    className="peer h-4 w-4 shrink-0 rounded-sm border border-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                    checked={allowUnauthenticatedVotes}
-                    onChange={(e) => setAllowUnauthenticatedVotes(e.target.checked)}
-                  />
-                  <Label
-                    htmlFor="allowUnauthenticatedVotes"
-                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                  >
-                    Allow unauthenticated users to vote (no login required)
-                  </Label>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="poll-end-date">Poll End Date (Optional)</Label>
-                  <Input
-                    id="poll-end-date"
-                    type="date"
-                    name="endsAt"
-                    value={endsAt || ""}
-                    onChange={(e) => setEndsAt(e.target.value)}
-                  />
-                </div>
               </form>
             </CardContent>
-            <CardFooter className="flex justify-end">
-              <Button type="submit" form="create-poll-form" disabled={isPending}>
-                {isPending ? "Creating..." : "Create Poll"}
-              </Button>
-            </CardFooter>
           </Card>
         </TabsContent>
       </Tabs>
-      {message && <p className="mt-4 text-center text-sm font-medium text-red-500">{message}</p>}
+      {message && (
+        <p className={`mt-6 text-center text-sm font-medium ${message.includes("successfully") ? "text-green-500" : "text-red-500"}`}>
+          {message}
+        </p>
+      )}
     </div>
   );
 }

@@ -12,6 +12,12 @@ import { submitVote } from "@/lib/actions";
 import React from 'react';
 import { Lock } from "lucide-react";
 import QRCodeShare from "@/components/polls/QRCodeShare";
+import PollResultsChart from "@/components/PollResultsChart";
+import PollComments from "@/components/PollComments";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { HiChevronLeft } from "react-icons/hi";
+import PollIcon from "@/components/shared/PollIcon";
 
 interface PollOption {
   id: string;
@@ -23,12 +29,22 @@ interface Poll {
   id: string;
   question: string;
   description: string | null;
-  created_at: string;
-  user_id: string;
-  creator_username: string; // Add creator_username to the interface
   allow_multiple_options: boolean;
   is_private: boolean;
-  poll_options: PollOption[];
+  allow_unauthenticated_votes: boolean;
+  created_at: string;
+  user_id: string;
+  creator_username: string | null;
+  poll_options: { id: string; option_text: string; votes_count: number }[];
+  comments: Comment[];
+}
+
+interface Comment {
+  id: string;
+  user_id: string | null;
+  user_email: string | null;
+  content: string;
+  created_at: string;
 }
 
 export default function ViewPollPage({ params }: { params: Promise<{ id: string }> }) {
@@ -94,11 +110,13 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
         user_id,
         allow_multiple_options,
         is_private,
+        allow_unauthenticated_votes,
         poll_options(
           id,
           option_text,
           votes_count
         ),
+        comments(id, user_id, content, created_at),
         profiles(username) // Join with profiles table to get username
       `
       )
@@ -106,7 +124,7 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
       .single();
 
     if (error) {
-      console.error("fetchPoll: Error fetching poll:", error);
+      console.error("fetchPoll: Error fetching poll:", JSON.stringify(error, null, 2));
       setError("Failed to load poll.");
     } else {
       console.log("fetchPoll: Data received:", data); // Debug log
@@ -182,71 +200,98 @@ export default function ViewPollPage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="space-y-6">
-      <Button variant="link" asChild className="pl-0">
+    <div className="space-y-6 max-w-2xl mx-auto py-8">
+      <Button variant="link" asChild className="pl-0 text-muted-foreground hover:text-primary transition-colors">
         <Link href="/polls" className="flex items-center gap-1">
-          <ChevronLeft className="h-4 w-4" />
+          <HiChevronLeft className="h-4 w-4" />
           Back to Polls
         </Link>
       </Button>
 
-      <h1 className="text-3xl font-bold flex items-center gap-2">
-        {poll.question}
-        {poll.is_private ? (
-          <Lock className="h-6 w-6 text-muted-foreground" title="Private Poll" />
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-muted-foreground" title="Public Poll"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-        )}
-      </h1>
-      {poll.description && <p className="text-muted-foreground">{poll.description}</p>}
+      <Card className="bg-card text-card-foreground shadow-lg">
+        <CardHeader className="space-y-4 pb-4 border-b">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <CardTitle className="text-3xl sm:text-4xl font-bold leading-tight flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              {poll.question}
+              <PollIcon isPrivate={poll.is_private} className="h-6 w-6 text-primary flex-shrink-0" />
+            </CardTitle>
+            {(currentUserId === poll.user_id || currentUserRole === 'admin') && (
+              <Button asChild aria-label="Edit poll" className="ml-auto">
+                <Link href={`/polls/${poll.id}/edit`}>
+                  Edit Poll
+                </Link>
+              </Button>
+            )}
+          </div>
+          {poll.description && <CardDescription className="text-base text-muted-foreground">{poll.description}</CardDescription>}
+        </CardHeader>
 
-      <RadioGroup value={selectedOption} onValueChange={setSelectedOption} className="space-y-4">
-        {poll.poll_options.map((option) => {
-          const totalVotes = poll.poll_options.reduce((sum, opt) => sum + opt.votes_count, 0);
-          const percentage = totalVotes === 0 ? 0 : Math.round((option.votes_count / totalVotes) * 100);
-          return (
-            <div key={option.id} className="flex items-center space-x-2">
-              <RadioGroupItem value={option.id} id={`option-${option.id}`} />
-              <Label htmlFor={`option-${option.id}`} className="text-lg flex justify-between w-full">
-                <span>{option.option_text}</span>
-                <span className="text-sm text-muted-foreground">{option.votes_count} votes ({percentage}%)</span>
-              </Label>
-            </div>
-          );
-        })}
-      </RadioGroup>
+        <CardContent className="pt-6 pb-4 space-y-6">
+          <RadioGroup value={selectedOption} onValueChange={setSelectedOption} className="space-y-4">
+            {poll.poll_options.map((option) => {
+              const totalVotes = poll.poll_options.reduce((sum, opt) => sum + opt.votes_count, 0);
+              const percentage = totalVotes === 0 ? 0 : Math.round((option.votes_count / totalVotes) * 100);
+              return (
+                <Label
+                  key={option.id}
+                  htmlFor={`option-${option.id}`}
+                  className="flex items-center space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                >
+                  <RadioGroupItem value={option.id} id={`option-${option.id}`} className="shrink-0" />
+                  <span className="flex-grow text-lg font-medium">{option.option_text}</span>
+                  <span className="text-sm text-muted-foreground">{option.votes_count} votes ({percentage}%)</span>
+                </Label>
+              );
+            })}
+          </RadioGroup>
 
-      <Button onClick={handleSubmitVote} disabled={!selectedOption || isPending}>
-        {isPending ? "Submitting..." : "Submit Vote"}
-      </Button>
-      {message && <p className="mt-4 text-center text-sm font-medium text-green-600">{message}</p>}
-
-      <div className="flex justify-between items-center text-sm text-muted-foreground">
-        <p>Created by {poll.creator_username}</p>
-        <p>Created on {new Date(poll.created_at).toLocaleDateString()}</p>
-      </div>
-
-      {(currentUserId === poll.user_id || currentUserRole === 'admin') && (
-        <div className="flex justify-end mt-4">
-          <Button asChild>
-            <Link href={`/polls/${poll.id}/edit`}>
-              Edit Poll
-            </Link>
+          <Button onClick={handleSubmitVote} disabled={!selectedOption || isPending} className="w-full mt-4">
+            {isPending ? "Submitting..." : "Submit Vote"}
           </Button>
-        </div>
+          {message && <p className="mt-4 text-center text-sm font-medium text-green-600">{message}</p>}
+        </CardContent>
+
+        <CardFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-sm text-muted-foreground pt-4 border-t gap-2">
+          <p className="text-sm">Created by <span className="font-semibold text-foreground">{poll.creator_username}</span></p>
+          <p className="text-sm">Created on {new Date(poll.created_at).toLocaleDateString()}</p>
+        </CardFooter>
+      </Card>
+
+      {poll && (
+        <Card className="mt-8 bg-card text-card-foreground shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl font-semibold">Poll Results</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PollResultsChart pollOptions={poll.poll_options} />
+          </CardContent>
+        </Card>
       )}
 
-      <div className="border-t pt-6 space-y-4">
-        <h2 className="text-xl font-bold">Share this poll</h2>
-        <div className="flex flex-col items-center gap-4">
+      {poll && (
+        <Card className="mt-8 bg-card text-card-foreground shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl font-semibold">Comments</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PollComments pollId={poll.id} initialComments={poll.comments} />
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-t pt-6 space-y-4 bg-card text-card-foreground shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl font-semibold">Share this poll</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center gap-6">
           <QRCodeShare url={`${window.location.origin}/polls/${poll.id}`} pollId={poll.id} />
-          <div className="flex gap-4">
-            <Button variant="outline" onClick={() => handleCopyLink(pollId)}>Copy Link</Button>
-            <Button variant="outline" onClick={() => handleShareOnTwitter(pollId)}>Share on Twitter</Button>
+          <div className="flex flex-col sm:flex-row gap-4 w-full justify-center">
+            <Button variant="outline" onClick={() => handleCopyLink(pollId)} className="w-full sm:w-auto flex-grow" aria-label="Copy poll link">Copy Link</Button>
+            <Button variant="outline" onClick={() => handleShareOnTwitter(pollId)} className="w-full sm:w-auto flex-grow" aria-label="Share poll on Twitter">Share on Twitter</Button>
           </div>
           {copyFeedback && <p className="text-sm text-green-600">{copyFeedback}</p>}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

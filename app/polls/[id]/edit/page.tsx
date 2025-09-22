@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, X, ChevronLeft } from "lucide-react";
+import { FaPlus, FaTimes } from "react-icons/fa";
+import { HiChevronLeft } from "react-icons/hi";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from 'next/navigation';
 import { updatePoll, updatePollSettings } from "@/lib/actions"; // We will create this action later
@@ -27,6 +28,7 @@ interface PollData {
   is_private: boolean;
   allow_unauthenticated_votes: boolean;
   poll_options: PollOption[];
+  ends_at: string | null; // Add ends_at to the interface
 }
 
 export default function EditPollPage({ params }: { params: Promise<{ id: string }> }) {
@@ -50,6 +52,7 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
   const [allowMultipleOptions, setAllowMultipleOptions] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [allowUnauthenticatedVotes, setAllowUnauthenticatedVotes] = useState(false); // New state
+  const [endsAt, setEndsAt] = useState<string | null>(null); // New state for end date
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const router = useRouter();
@@ -63,7 +66,7 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
       // Fetch poll data for editing, including options
       const { data, error } = await supabase
         .from("polls")
-        .select(`id, question, description, allow_multiple_options, is_private, allow_unauthenticated_votes, poll_options(id, option_text)`)
+        .select(`id, question, description, allow_multiple_options, is_private, ends_at, allow_unauthenticated_votes, poll_options(id, option_text)`)
         .eq("id", pollId)
         .single();
 
@@ -79,6 +82,7 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
         setAllowMultipleOptions(data.allow_multiple_options);
         setIsPrivate(data.is_private);
         setAllowUnauthenticatedVotes(data.allow_unauthenticated_votes); // Set new state
+        setEndsAt(data.ends_at ? new Date(data.ends_at).toISOString().split('T')[0] : null); // Set end date
       }
       setLoading(false);
     }
@@ -137,21 +141,21 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <Button variant="link" asChild className="pl-0">
         <Link href="/polls" className="flex items-center gap-1">
-          <ChevronLeft className="h-4 w-4" />
+          <HiChevronLeft className="h-4 w-4" />
           Back to Polls
         </Link>
       </Button>
 
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Edit Poll</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" asChild>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl sm:text-3xl font-bold">Edit Poll</h1>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" asChild className="flex-grow sm:flex-none">
             <Link href="/polls">Cancel</Link>
           </Button>
-          <Button type="submit" form="edit-poll-form" disabled={isPending}>
+          <Button type="submit" form="edit-poll-form" disabled={isPending} className="flex-grow sm:flex-none">
             {isPending ? "Saving..." : "Save Changes"}
           </Button>
         </div>
@@ -204,19 +208,19 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
                         required
                       />
                       {options.length > 2 && (
-                        <Button variant="ghost" size="icon" onClick={() => handleRemoveOption(index)}>
-                          <X className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" onClick={() => handleRemoveOption(index)} aria-label="Remove option">
+                          <FaTimes className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
                   ))}
                   <Button type="button" variant="outline" onClick={handleAddOption} className="mt-2">
-                    <Plus className="mr-2 h-4 w-4" /> Add Option
+                    <FaPlus className="mr-2 h-4 w-4" /> Add Option
                   </Button>
                 </div>
               </form>
             </CardContent>
-            <CardFooter className="flex justify-end">
+            <CardFooter className="flex justify-end p-4 sm:p-6 lg:p-8 border-t">
               <Button type="submit" form="edit-poll-form" disabled={isPending}>
                 {isPending ? "Saving..." : "Save Changes"}
               </Button>
@@ -229,12 +233,15 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
               <CardTitle>Poll Settings</CardTitle>
               <CardDescription>Configure additional options for your poll</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 p-4 sm:p-6">
               <form id="edit-poll-settings-form" action={async (formData) => {
                 formData.append("id", poll.id);
                 formData.set("allowMultipleOptions", allowMultipleOptions ? "on" : "off");
                 formData.set("isPrivate", isPrivate ? "on" : "off");
                 formData.set("allowUnauthenticatedVotes", allowUnauthenticatedVotes ? "on" : "off"); // Set new field
+                if (endsAt) {
+                  formData.set("endsAt", endsAt);
+                }
 
                 // Use startTransition for non-blocking UI updates during settings update
                 startTransition(async () => {
@@ -247,7 +254,7 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
                     async function refreshPoll() {
                       const { data, error } = await supabase
                         .from("polls")
-                        .select(`id, question, description, allow_multiple_options, is_private, allow_unauthenticated_votes, poll_options(id, option_text)`)
+                        .select(`id, question, description, allow_multiple_options, is_private, ends_at, allow_unauthenticated_votes, poll_options(id, option_text)`)
                         .eq("id", poll.id)
                         .single();
 
@@ -260,12 +267,13 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
                         setAllowMultipleOptions(data.allow_multiple_options);
                         setIsPrivate(data.is_private);
                         setAllowUnauthenticatedVotes(data.allow_unauthenticated_votes); // Update new state
+                        setEndsAt(data.ends_at ? new Date(data.ends_at).toISOString().split('T')[0] : null); // Update end date
                       }
                     }
                     refreshPoll(); // Execute refresh
                   }
                 });
-              }} className="space-y-4">
+              }} className="space-y-6">
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -320,13 +328,13 @@ export default function EditPollPage({ params }: { params: Promise<{ id: string 
                     id="poll-end-date"
                     type="date"
                     name="endsAt"
-                    value={poll.ends_at ? new Date(poll.ends_at).toISOString().split('T')[0] : ""}
-                    onChange={(e) => setPoll({ ...poll, ends_at: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                    value={endsAt || ""}
+                    onChange={(e) => setEndsAt(e.target.value)}
                   />
                 </div>
               </form>
             </CardContent>
-            <CardFooter className="flex justify-end">
+            <CardFooter className="flex justify-end p-4 sm:p-6 lg:p-8 border-t">
               <Button type="submit" form="edit-poll-settings-form" disabled={isPending}>
                 {isPending ? "Saving..." : "Save Settings"}
               </Button>

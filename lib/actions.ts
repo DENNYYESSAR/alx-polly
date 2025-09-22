@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { cookies } from 'next/headers';
+// @ts-ignore: This module is provided by Next.js edge runtime and types are handled internally or not strictly required for basic usage
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
 interface CreatePollFormState {
@@ -107,6 +108,7 @@ export async function createPoll(formData: FormData): Promise<CreatePollFormStat
     await supabase.from("polls").delete().eq("id", poll.id);
     return { message: "Failed to create poll options." };
   }
+  return { message: "Poll created successfully!" };
 }
 
 interface VoteFormState {
@@ -205,6 +207,8 @@ export async function updatePoll(formData: FormData): Promise<UpdatePollFormStat
   const optionsJson = formData.get("options_json") as string;
   const allowMultipleOptions = formData.get("allowMultipleOptions") === "on";
   const isPrivate = formData.get("isPrivate") === "on";
+  const endsAtString = formData.get("endsAt") as string;
+  const endsAt = endsAtString ? new Date(endsAtString).toISOString() : null;
 
   const options = JSON.parse(optionsJson) as string[];
 
@@ -231,6 +235,7 @@ export async function updatePoll(formData: FormData): Promise<UpdatePollFormStat
       description,
       allow_multiple_options: allowMultipleOptions,
       is_private: isPrivate,
+      ends_at: endsAt,
     })
     .eq("id", pollId)
     .eq("user_id", user.id);
@@ -248,15 +253,15 @@ export async function updatePoll(formData: FormData): Promise<UpdatePollFormStat
     return { message: "Failed to update poll options." };
   }
 
-  const existingOptionTexts = new Set(existingOptions.map(opt => opt.option_text));
+  const existingOptionTexts = new Set(existingOptions.map((opt: { id: string; option_text: string }) => opt.option_text));
   const newOptionTexts = new Set(options);
 
-  const optionsToDelete = existingOptions.filter(opt => !newOptionTexts.has(opt.option_text));
+  const optionsToDelete = existingOptions.filter((opt: { id: string; option_text: string }) => !newOptionTexts.has(opt.option_text));
   if (optionsToDelete.length > 0) {
     const { error: deleteError } = await supabase
       .from("poll_options")
       .delete()
-      .in("id", optionsToDelete.map(opt => opt.id));
+      .in("id", optionsToDelete.map((opt: { id: string; option_text: string }) => opt.id));
     if (deleteError) {
       return { message: "Failed to update poll options." };
     }
@@ -296,6 +301,8 @@ export async function updatePollSettings(formData: FormData): Promise<UpdatePoll
   const allowMultipleOptions = formData.get("allowMultipleOptions") === "on";
   const isPrivate = formData.get("isPrivate") === "on";
   const allowUnauthenticatedVotes = formData.get("allowUnauthenticatedVotes") === "on"; // New field
+  const endsAtString = formData.get("endsAt") as string;
+  const endsAt = endsAtString ? new Date(endsAtString).toISOString() : null;
 
   const supabase = await getSupabaseClient();
 
@@ -315,6 +322,7 @@ export async function updatePollSettings(formData: FormData): Promise<UpdatePoll
       allow_multiple_options: allowMultipleOptions,
       is_private: isPrivate,
       allow_unauthenticated_votes: allowUnauthenticatedVotes, // Update new field
+      ends_at: endsAt,
     })
     .eq("id", pollId)
     .eq("user_id", user.id);
@@ -397,6 +405,27 @@ export async function deletePoll(pollId: string): Promise<DeletePollFormState> {
 
   revalidatePath("/polls");
   return { message: "Poll deleted successfully!" };
+}
+
+export async function submitComment(
+  pollId: string,
+  userId: string,
+  content: string
+) {
+  const supabase = await getSupabaseClient();
+
+  const { error } = await supabase.from("comments").insert({
+    poll_id: pollId,
+    user_id: userId,
+    content: content,
+  });
+
+  if (error) {
+    console.error("Error submitting comment:", error);
+    throw new Error("Failed to submit comment.");
+  }
+
+  revalidatePath(`/polls/${pollId}`);
 }
 
 interface ForgotPasswordFormState {

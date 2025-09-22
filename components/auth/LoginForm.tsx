@@ -6,7 +6,8 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 import { useRouter } from 'next/navigation';
 import Link from "next/link";
-import { EyeIcon, EyeOffIcon } from "lucide-react"; // Import icons
+import { FaEye, FaEyeSlash } from "react-icons/fa"; // Import icons from react-icons
+import { Label } from "@/components/ui/label";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
@@ -36,36 +37,44 @@ export default function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleLogin} className="space-y-4">
-      <Input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-      />
-      <div className="relative">
+    <form onSubmit={handleLogin} className="space-y-6">
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
         <Input
-          type={showPassword ? "text" : "password"} // Conditionally set type
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          type="email"
+          id="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute right-2 top-1/2 -translate-y-1/2"
-          onClick={() => setShowPassword((prev) => !prev)}
-        >
-          {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />} 
-        </Button>
       </div>
-      <Button type="submit" disabled={loading}>
+      <div className="space-y-2">
+        <Label htmlFor="password">Password</Label>
+        <div className="relative">
+          <Input
+            type={showPassword ? "text" : "password"} // Conditionally set type
+            id="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:bg-transparent"
+            onClick={() => setShowPassword((prev) => !prev)}
+          >
+            {showPassword ? <FaEyeSlash className="h-4 w-4" /> : <FaEye className="h-4 w-4" />} 
+          </Button>
+        </div>
+      </div>
+      <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Logging in..." : "Login"}
       </Button>
-      {message && <p className="text-center text-red-500">{message}</p>}
+      {message && <p className="text-center text-destructive">{message}</p>}
       <div className="text-center text-sm">
         <Link href="/forgot-password" className="font-medium text-primary hover:underline">
           Forgot password?
